@@ -129,7 +129,7 @@ class _GeneAnnotation:
         'Chromosome': self.chromosome,
         'Start': self.start,
         'End': self.end,
-    })
+    }).reset_index(drop=True)
 
 
 def _get_empty_metadata_table() -> pd.DataFrame:
