@@ -32,7 +32,7 @@ import numpy as np
 import pandas as pd
 import pyranges
 
-_MAX_SPLICE_SITES = 256
+MAX_SPLICE_SITES = 256
 PAD_VALUE = -1
 
 
@@ -245,11 +245,13 @@ class SpliceJunctionVariantScorer(variant_scoring.VariantScorer):
         'splice_site_positions'
     ]
 
-    # Ignore splice sites beyond the max_splice_sites specified. This works
-    # because padding splice sites are always at the end of the array.
-    ref_junctions = ref_junctions[:_MAX_SPLICE_SITES, :_MAX_SPLICE_SITES]
-    alt_junctions = alt_junctions[:_MAX_SPLICE_SITES, :_MAX_SPLICE_SITES]
-    splice_site_positions = splice_site_positions[:, :_MAX_SPLICE_SITES]
+    # JAX dynamic slicing does not work with transfer_guard.
+    with jax.transfer_guard('allow'):
+      # Ignore splice sites beyond the max_splice_sites specified. This works
+      # because padding splice sites are always at the end of the array.
+      ref_junctions = ref_junctions[:MAX_SPLICE_SITES, :MAX_SPLICE_SITES]
+      alt_junctions = alt_junctions[:MAX_SPLICE_SITES, :MAX_SPLICE_SITES]
+      splice_site_positions = splice_site_positions[:, :MAX_SPLICE_SITES]
 
     @jax.jit
     def _apply_log_offset(x):

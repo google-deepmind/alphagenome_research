@@ -77,7 +77,7 @@ or higher.
 ## Quick start
 
 The easiest way to interact with the AlphaGenome model is using the provided
-[DNA Model class](/model/dna_model.py). This wraps the core model and provides a
+[DNA Model class](/src/alphagenome_research/model/dna_model.py). This wraps the core model and provides a
 more intuitive set of functions for creating predictions, scoring variants,
 performing in silico mutagenesis (ISM) and more.
 

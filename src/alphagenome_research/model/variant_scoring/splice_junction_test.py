@@ -125,17 +125,18 @@ class SpliceJunctionVariantScorerTest(parameterized.TestCase):
     interval = genome.Interval('chr1', 0, 2048)
     variant = genome.Variant('chr1', 105, 'C', 'T')
 
-    max_splice_sites = 4
+    max_splice_sites = splice_junction.MAX_SPLICE_SITES
+    num_splice_sites = max_splice_sites + 1
     num_tracks = 5
     splice_site_positions = (
-        jnp.arange(max_splice_sites * 4, dtype=jnp.int32).reshape(
-            (4, max_splice_sites)
+        jnp.arange(num_splice_sites * 4, dtype=jnp.int32).reshape(
+            (4, num_splice_sites)
         )
         + 1
     )
     reference_predictions = jnp.arange(
-        max_splice_sites * max_splice_sites * num_tracks, dtype=np.float32
-    ).reshape((max_splice_sites, max_splice_sites, num_tracks))
+        num_splice_sites * num_splice_sites * num_tracks, dtype=np.float32
+    ).reshape((num_splice_sites, num_splice_sites, num_tracks))
     alternative_predictions = jnp.zeros_like(reference_predictions)
     with jax.transfer_guard(transfer_guard):
       scores = scorer.score_variant(
@@ -156,8 +157,10 @@ class SpliceJunctionVariantScorerTest(parameterized.TestCase):
           interval=interval,
           variant=variant,
       )
+
     np.testing.assert_array_equal(
-        scores['splice_site_positions'], splice_site_positions
+        scores['splice_site_positions'],
+        splice_site_positions[:, :max_splice_sites],
     )
     chex.assert_shape(
         scores['delta_counts'], (max_splice_sites, max_splice_sites, num_tracks)
