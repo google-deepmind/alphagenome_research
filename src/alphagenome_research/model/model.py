@@ -27,6 +27,7 @@ from alphagenome_research.model import schemas
 from alphagenome_research.model import splicing
 from alphagenome_research.model.metadata import metadata as metadata_lib
 import haiku as hk
+import jax
 from jaxtyping import Array, Float, Int, PyTree  # pylint: disable=g-importing-member, g-multiple-import
 
 
@@ -92,8 +93,10 @@ class AlphaGenome(hk.Module):
       output_metadata: Mapping[
           dna_model.Organism, metadata_lib.AlphaGenomeOutputMetadata
       ],
+      *,
       num_splice_sites: int = 512,
       splice_site_threshold: float = 0.1,
+      freeze_trunk_embeddings: bool = False,
       name: str | None = None,
   ):
     """Initializes the AlphaGenome model.
@@ -103,12 +106,15 @@ class AlphaGenome(hk.Module):
       num_splice_sites: The maximum number of splice sites that are extracted
         from the splice site classification predictions.
       splice_site_threshold: The threshold to use for splice site prediction.
+      freeze_trunk_embeddings: Whether to stop the gradient to the embeddings.
+        This is useful for training only the heads in fine-tuning.
       name: The name of the module.
     """
     super().__init__(name=name or 'alphagenome')
     self._output_metadata = output_metadata
     self._num_splice_sites = num_splice_sites
     self._splice_site_threshold = splice_site_threshold
+    self._freeze_trunk_embeddings = freeze_trunk_embeddings
     self._heads: dict[heads_module.HeadName, heads_module.Head] = {}
     for head in heads_module.HeadName:
       output_type = heads_module.get_head_config(head).output_type
@@ -210,6 +216,8 @@ class AlphaGenome(hk.Module):
         embeddings_128bp=embeddings_128bp,
         embeddings_pair=embeddings_pair,
     )
+    if self._freeze_trunk_embeddings:
+      embeddings = jax.lax.stop_gradient(embeddings)
     predictions = {
         'embeddings_1bp': embeddings_1bp,
     }

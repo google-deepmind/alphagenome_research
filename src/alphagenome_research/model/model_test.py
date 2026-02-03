@@ -16,7 +16,6 @@ from absl.testing import absltest
 from absl.testing import parameterized
 from alphagenome.data import junction_data
 from alphagenome.data import track_data
-from alphagenome.models import dna_client
 from alphagenome.models import dna_model
 from alphagenome_research.model import embeddings as embeddings_lib
 from alphagenome_research.model import model as model_lib
@@ -27,11 +26,12 @@ import haiku as hk
 import jax
 import jax.numpy as jnp
 from jaxtyping import Array, Float, Int  # pylint: disable=g-importing-member, g-multiple-import
+import numpy as np
 import pandas as pd
 
 
 def _mock_track_metadata(
-    num_tracks: int, num_padding: int
+    num_tracks: int, num_padding: int = 0
 ) -> track_data.TrackMetadata:
   return pd.DataFrame({
       'name': (
@@ -62,7 +62,7 @@ class ModelTest(parameterized.TestCase):
     """Tests that the model raises an error if the metadata is inconsistent."""
     output_metadata_missing = {
         dna_model.Organism.HOMO_SAPIENS: metadata_lib.AlphaGenomeOutputMetadata(
-            atac=_mock_track_metadata(num_tracks=13, num_padding=0)
+            atac=_mock_track_metadata(num_tracks=13)
         ),
         dna_model.Organism.MUS_MUSCULUS: (
             metadata_lib.AlphaGenomeOutputMetadata()
@@ -151,7 +151,7 @@ class ModelTest(parameterized.TestCase):
     num_tracks = 13
     output_metadata = {
         dna_model.Organism.HOMO_SAPIENS: metadata_lib.AlphaGenomeOutputMetadata(
-            atac=_mock_track_metadata(num_tracks=num_tracks, num_padding=0)
+            atac=_mock_track_metadata(num_tracks=num_tracks)
         ),
         dna_model.Organism.MUS_MUSCULUS: metadata_lib.AlphaGenomeOutputMetadata(
             atac=_mock_track_metadata(num_tracks=7, num_padding=num_tracks - 7)
@@ -199,7 +199,7 @@ class ModelTest(parameterized.TestCase):
     num_splice_sites = 17
     output_metadata = {
         dna_model.Organism.HOMO_SAPIENS: metadata_lib.AlphaGenomeOutputMetadata(
-            splice_sites=_mock_track_metadata(5, 0),
+            splice_sites=_mock_track_metadata(5),
             splice_junctions=_mock_junction_metadata(num_tissues),
         ),
     }
@@ -259,18 +259,14 @@ class ModelTest(parameterized.TestCase):
     num_splice_sites = 17
     num_tissues_junctions = 1
     output_metadata = {
-        dna_client.Organism.HOMO_SAPIENS: (
-            metadata_lib.AlphaGenomeOutputMetadata(
-                atac=_mock_track_metadata(num_tracks=1, num_padding=0),
-                contact_maps=_mock_track_metadata(num_tracks=1, num_padding=0),
-                splice_sites=_mock_track_metadata(num_tracks=5, num_padding=0),
-                splice_site_usage=_mock_track_metadata(
-                    num_tracks=4, num_padding=0
-                ),
-                splice_junctions=_mock_junction_metadata(
-                    num_tissues=num_tissues_junctions
-                ),
-            )
+        dna_model.Organism.HOMO_SAPIENS: metadata_lib.AlphaGenomeOutputMetadata(
+            atac=_mock_track_metadata(num_tracks=1),
+            contact_maps=_mock_track_metadata(num_tracks=1),
+            splice_sites=_mock_track_metadata(num_tracks=5),
+            splice_site_usage=_mock_track_metadata(num_tracks=4),
+            splice_junctions=_mock_junction_metadata(
+                num_tissues=num_tissues_junctions
+            ),
         )
     }
 
@@ -343,6 +339,152 @@ class ModelTest(parameterized.TestCase):
     chex.assert_trees_all_equal_shapes(state, state2)
     chex.assert_trees_all_equal_shapes(predictions, predictions2)
     chex.assert_trees_all_equal_shapes(params, grads)
+
+  def test_finetuning_weights_merging(self):
+    """Tests that the weights can be merged for fine-tuning.
+
+    We test this by creating a base model and a fine-tuning model, where the
+    fine-tuning model has fewer heads and tracks than the base model. We then
+    merge the weights of the base model and the fine-tuning model, and check
+    that the loss can be computed with the merged weights.
+    """
+    seq_length = 131072
+    batch_size = 1
+    key = jax.random.key(0)
+
+    # Setup base model.
+    base_metadata = {
+        dna_model.Organism.HOMO_SAPIENS: metadata_lib.AlphaGenomeOutputMetadata(
+            atac=_mock_track_metadata(num_tracks=(atac_tracks_base := 5)),
+            rna_seq=_mock_track_metadata(num_tracks=(rna_seq_tracks_base := 3)),
+        ),
+    }
+
+    @hk.transform_with_state
+    def base_forward(batch: schemas.DataBatch):
+      return model_lib.AlphaGenome(base_metadata).loss(batch)
+
+    base_batch = schemas.DataBatch(
+        dna_sequence=np.zeros((batch_size, seq_length, 4), dtype=np.float32),
+        organism_index=np.zeros((batch_size,), dtype=np.int32),
+        atac=jnp.zeros(
+            (batch_size, seq_length, atac_tracks_base), dtype=np.float32
+        ),
+        atac_mask=np.ones((batch_size, 1, atac_tracks_base), dtype=bool),
+        rna_seq=np.zeros(
+            (batch_size, seq_length, rna_seq_tracks_base), dtype=np.float32
+        ),
+        rna_seq_mask=np.ones((batch_size, 1, rna_seq_tracks_base), dtype=bool),
+    )
+    base_params, base_state = jax.eval_shape(base_forward.init, key, base_batch)
+
+    # 2. Setup fine-tuning model.
+    ft_metadata = {
+        dna_model.Organism.HOMO_SAPIENS: metadata_lib.AlphaGenomeOutputMetadata(
+            atac=_mock_track_metadata(num_tracks=(atac_tracks_ft := 7)),
+        ),
+    }
+
+    @hk.transform_with_state
+    def ft_forward(batch: schemas.DataBatch):
+      return model_lib.AlphaGenome(ft_metadata).loss(batch)
+
+    ft_batch = schemas.DataBatch(
+        dna_sequence=np.zeros((batch_size, seq_length, 4), dtype=np.float32),
+        organism_index=np.zeros((batch_size,), dtype=np.int32),
+        atac=jnp.zeros(
+            (batch_size, seq_length, atac_tracks_ft), dtype=np.float32
+        ),
+        atac_mask=np.ones((batch_size, 1, atac_tracks_ft), dtype=bool),
+    )
+    ft_params, ft_state = jax.eval_shape(ft_forward.init, key, ft_batch)
+
+    # 3. Merge weights: base model weights + fine-tuning model head weights.
+    def merge(base_weights, ft_weights):
+      ft_head_weights = hk.data_structures.filter(
+          lambda module_name, name, v: 'head' in module_name, ft_weights
+      )
+      return hk.data_structures.merge(base_weights, ft_head_weights)
+
+    merged_params = merge(base_params, ft_params)
+    merged_state = merge(base_state, ft_state)
+
+    # 4. Check that we can compute loss with merged weights
+    (loss, scalars, predictions), _ = jax.eval_shape(
+        ft_forward.apply, merged_params, merged_state, key, ft_batch
+    )
+    chex.assert_shape(loss, ())
+    self.assertContainsSubset(['atac_loss'], scalars.keys())
+    self.assertNotIn('rna_seq_loss', scalars.keys())
+    chex.assert_tree_shape_prefix(predictions, (batch_size,))
+    self.assertEqual(
+        predictions['atac']['scaled_predictions_1bp'].shape,
+        (batch_size, seq_length, atac_tracks_ft),
+    )
+
+  def test_freeze_trunk_embeddings(self):
+    if jax.local_devices()[0].platform.lower() not in {'gpu', 'tpu'}:
+      self.skipTest('This test requires accelerator devices.')
+
+    seq_length, batch_size, key = 131072, 1, jax.random.key(0)
+
+    metadata = {
+        dna_model.Organism.HOMO_SAPIENS: metadata_lib.AlphaGenomeOutputMetadata(
+            atac=_mock_track_metadata(num_tracks=(atac_tracks_base := 5)),
+            rna_seq=_mock_track_metadata(num_tracks=(rna_seq_tracks_base := 3)),
+        ),
+    }
+
+    @hk.transform_with_state
+    def forward(batch: schemas.DataBatch):
+      return model_lib.AlphaGenome(metadata, freeze_trunk_embeddings=True).loss(
+          batch
+      )
+
+    @jax.jit
+    def grads_fn(params, state, batch):
+      def loss_fn(params, state, batch):
+        (loss, _, _), _ = forward.apply(params, state, None, batch)
+        return loss
+
+      grads_fn = jax.grad(loss_fn)
+      return grads_fn(params, state, batch)
+
+    batch = schemas.DataBatch(
+        dna_sequence=np.zeros((batch_size, seq_length, 4), dtype=np.float32),
+        organism_index=np.zeros((batch_size,), dtype=np.int32),
+        atac=jnp.zeros(
+            (batch_size, seq_length, atac_tracks_base), dtype=np.float32
+        ),
+        atac_mask=np.ones((batch_size, 1, atac_tracks_base), dtype=bool),
+        rna_seq=np.zeros(
+            (batch_size, seq_length, rna_seq_tracks_base), dtype=np.float32
+        ),
+        rna_seq_mask=np.ones((batch_size, 1, rna_seq_tracks_base), dtype=bool),
+    )
+    batch = jax.device_put(batch, jax.local_devices()[0])
+
+    params, state = jax.jit(forward.init)(key, batch)
+    grads = jax.jit(grads_fn)(params, state, batch)
+    chex.assert_trees_all_equal_shapes(params, grads)
+    grads_trunk = hk.data_structures.filter(
+        lambda module_name, name, v: 'head' not in module_name, grads
+    )
+    grads_head = hk.data_structures.filter(
+        lambda module_name, name, v: 'head' in module_name, grads
+    )
+    # Gradients in the trunk should be zero.
+    chex.assert_trees_all_equal(
+        grads_trunk,
+        jax.tree.map(np.zeros_like, grads_trunk),
+    )
+    # Gradients in the head should be non-zero.
+    head_grad_sq_norm = jax.tree_util.tree_reduce(
+        lambda acc, x: acc + jnp.sum(jnp.square(x)),
+        grads_head,
+        initializer=0.0,
+    )
+    self.assertGreater(head_grad_sq_norm, 0.0)
 
 
 if __name__ == '__main__':
