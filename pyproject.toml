@@ -66,18 +66,10 @@ path = 'src/alphagenome_research/__init__.py'
 [tool.hatch.envs.default]
 installer = 'uv'
 
-[tool.setuptools.packages.find]
-include = ['README.md', 'LICENSE']
-exclude = ['*_test.py', 'examples']
-
-[tool.setuptools.package-data]
-alphagenome_research = ["model/metadata/*.textproto"]
-
 [tool.hatch.envs.hatch-test]
 default-args = []
 extra-dependencies=['typeguard==2.13.3']
 parallel = true
-
 
 [tool.hatch.envs.hatch-test.env-vars]
 MPLBACKEND = 'agg'
