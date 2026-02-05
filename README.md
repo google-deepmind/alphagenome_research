@@ -70,9 +70,25 @@ Requests are processed immediately.
 
 In order to run the model, we recommend running with at least an
 [NVIDIA H100 GPU](https://docs.cloud.google.com/compute/docs/gpus#h100-gpus).
-Please ensure CUDA, cuDNN and JAX are correctly installed; the
-[JAX installation documentation](https://docs.jax.dev/en/latest/installation.html#nvidia-gpu)
-is a useful resource in this regard.
+
+#### GPU installation (NVIDIA CUDA)
+
+For local GPU support with CUDA 12, install JAX with CUDA and cuDNN:
+
+```bash
+$ pip install jax[cuda12_local] nvidia-cudnn-cu12
+```
+
+For more details, see the
+[JAX installation documentation](https://docs.jax.dev/en/latest/installation.html#nvidia-gpu).
+
+#### Running the notebooks locally
+
+If you plan to run the Colab notebooks locally, you will also need:
+
+```bash
+$ pip install ipywidgets
+```
 
 For training, we recommend running on
 [Tensor Processing Units (TPUs) v3](https://docs.cloud.google.com/tpu/docs/v3)
