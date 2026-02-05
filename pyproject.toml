@@ -49,6 +49,7 @@ dependencies=[
     'pyarrow',
     'pyfaidx',
     'pyranges',
+    'scikit-learn',
     'tensorflow',
     # keep-sorted end
 ]
