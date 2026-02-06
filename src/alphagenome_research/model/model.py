@@ -101,6 +101,7 @@ class AlphaGenome(hk.Module):
       num_splice_sites: int = DEFAULT_NUM_SPLICE_SITES,
       splice_site_threshold: float = DEFAULT_SPLICE_SITE_THRESHOLD,
       freeze_trunk_embeddings: bool = False,
+      num_organisms: int = 2,
       name: str | None = None,
   ):
     """Initializes the AlphaGenome model.
@@ -112,13 +113,18 @@ class AlphaGenome(hk.Module):
       splice_site_threshold: The threshold to use for splice site prediction.
       freeze_trunk_embeddings: Whether to stop the gradient to the embeddings.
         This is useful for training only the heads in fine-tuning.
+      num_organisms: The number of organisms. This is used to initialize the
+        organism embedding layer. Default is 2, for human and mouse. Leave at 2
+        to load pre-trained weights.
       name: The name of the module.
     """
+
     super().__init__(name=name or 'alphagenome')
     self._output_metadata = output_metadata
     self._num_splice_sites = num_splice_sites
     self._splice_site_threshold = splice_site_threshold
     self._freeze_trunk_embeddings = freeze_trunk_embeddings
+    self._num_organisms = num_organisms
     self._heads: dict[heads_module.HeadName, heads_module.Head] = {}
     for head in heads_module.HeadName:
       output_type = heads_module.get_head_config(head).output_type
@@ -143,10 +149,6 @@ class AlphaGenome(hk.Module):
       self._heads[head] = heads_module.create_head(
           heads_module.get_head_config(head), self._output_metadata
       )
-
-  @property
-  def _num_organisms(self) -> int:
-    return len(self._output_metadata)
 
   @hk.name_like('__call__')
   def predict_junctions(

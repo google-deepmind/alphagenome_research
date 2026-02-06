@@ -262,7 +262,8 @@ class _MultiOrganismLinear(hk.Module):
       self, x: Float[Array, 'B *S D'], organism_index: Int[Array, 'B']
   ) -> Float[Array, 'B *S {self._output_size}']:
     w_shape = (self._num_organisms, x.shape[-1], self._output_size)
-    w_init = hk.initializers.VarianceScaling(1.0, 'fan_in', 'truncated_normal')
+    stddev = 1.0 / np.sqrt(x.shape[-1])
+    w_init = hk.initializers.TruncatedNormal(stddev=stddev)
     w = hk.get_parameter('w', w_shape, init=w_init).astype(x.dtype)
     w = _get_param_for_index(w, organism_index)
     b_shape = (self._num_organisms, self._output_size)
