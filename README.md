@@ -158,6 +158,7 @@ If you use AlphaGenome in your research, please cite using:
   journal={Nature},
   volume={649},
   number={8099},
+  pages={1206--1218},
   year={2026},
   doi={10.1038/s41586-025-10014-0},
   publisher={Nature Publishing Group UK London}
