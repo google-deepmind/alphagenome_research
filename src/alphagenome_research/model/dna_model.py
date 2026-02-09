@@ -1097,20 +1097,8 @@ def create_model(
         [chex.PRNGKey, Float[Array, 'B S 4'], Int32[Array, 'B']],
         tuple[hk.Params, hk.State],
     ],
-    Callable[
-        [hk.Params, hk.State, Float[Array, 'B S 4'], Int32[Array, 'B']],
-        PyTree[Shaped[Array, 'B ...'] | None],
-    ],
-    Callable[
-        [
-            hk.Params,
-            hk.State,
-            Float[Array, 'B S D'],
-            Int32[Array, 'B 4 K'],
-            Int32[Array, 'B'],
-        ],
-        PyTree[Shaped[Array, 'B ...'] | None],
-    ],
+    ApplyFn,
+    JunctionsApplyFn,
 ]:
   """Helper to create AlphaGenome init and two apply functions."""
 
@@ -1163,7 +1151,7 @@ def create_model(
             trunk_embeddings, splice_site_positions, organism_index
         )
 
-    (predictions, _), _ = _forward_junctions.apply(
+    predictions, _ = _forward_junctions.apply(
         params,
         state,
         None,

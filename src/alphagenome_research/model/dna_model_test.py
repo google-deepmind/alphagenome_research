@@ -696,6 +696,73 @@ class DnaModelTest(parameterized.TestCase):
         organism_settings.keys(),
     )
 
+  def test_create_model(self):
+    init, apply, apply_junctions = dna_model.create_model(
+        {dna_model.Organism.HOMO_SAPIENS: self._metadata}
+    )
+
+    dna_sequence_shape = jax.ShapeDtypeStruct((1, 2048, 4), dtype=jnp.float32)
+    organism_index_shape = jax.ShapeDtypeStruct((1,), dtype=jnp.int32)
+
+    params, state = jax.eval_shape(
+        init, jax.random.PRNGKey(0), dna_sequence_shape, organism_index_shape
+    )
+
+    predictions = jax.eval_shape(
+        apply, params, state, dna_sequence_shape, organism_index_shape
+    )
+    expected_predictions = {
+        dna_output.OutputType.ATAC: jax.ShapeDtypeStruct(
+            (1, 2048, 2), dtype=jnp.bfloat16
+        ),
+        dna_output.OutputType.DNASE: jax.ShapeDtypeStruct(
+            (1, 2048, 1), dtype=jnp.bfloat16
+        ),
+        dna_output.OutputType.CHIP_TF: jax.ShapeDtypeStruct(
+            (1, 16, 2), dtype=jnp.bfloat16
+        ),
+        dna_output.OutputType.SPLICE_SITES: jax.ShapeDtypeStruct(
+            (1, 2048, 5), dtype=jnp.bfloat16
+        ),
+        dna_output.OutputType.SPLICE_JUNCTIONS: {
+            'predictions': jax.ShapeDtypeStruct(
+                (1, 512, 512, 24), dtype=jnp.bfloat16
+            ),
+            'splice_site_positions': jax.ShapeDtypeStruct(
+                (1, 4, 512), dtype=jnp.int32
+            ),
+        },
+        dna_output.OutputType.CONTACT_MAPS: jax.ShapeDtypeStruct(
+            (1, 1, 1, 2), dtype=jnp.bfloat16
+        ),
+    }
+    chex.assert_trees_all_equal_shapes_and_dtypes(
+        dna_model.extract_predictions(predictions), expected_predictions
+    )
+
+    junction_predictions = jax.eval_shape(
+        apply_junctions,
+        params,
+        state,
+        predictions['embeddings_1bp'],
+        predictions['splice_sites_junction']['splice_site_positions'],
+        organism_index_shape,
+    )
+    expected_junction_predictions = {
+        'predictions': jax.ShapeDtypeStruct(
+            (1, 512, 512, 24), dtype=jnp.bfloat16
+        ),
+        'splice_junction_mask': jax.ShapeDtypeStruct(
+            (1, 512, 512, 24), dtype=jnp.bool
+        ),
+        'splice_site_positions': jax.ShapeDtypeStruct(
+            (1, 4, 512), dtype=jnp.int32
+        ),
+    }
+    chex.assert_trees_all_equal_shapes_and_dtypes(
+        junction_predictions, expected_junction_predictions
+    )
+
   @parameterized.parameters(('all_folds',), (dna_model.ModelVersion.ALL_FOLDS,))
   @mock.patch.object(jax, 'eval_shape', return_value=MOCK_SHAPES, autospec=True)
   def test_create_from_kaggle(self, version, mock_eval_shape):
