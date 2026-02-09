@@ -291,12 +291,10 @@ class GeneMaskExtractorTest(parameterized.TestCase):
     with self.assertRaisesRegex(ValueError, 'Gene ID wrong_gene_id not found'):
       extractor.extract(interval, gene_id='wrong_gene_id')
 
-  def test_exon_extractor_with_wrong_transcript_id_raises_error(self):
+  def test_exon_extractor_transcript_with_no_exons_returns_empty(self):
     extractor = gene_mask_extractor._ExonExtractor(self._gtf)  # pylint: disable=protected-access
-    with self.assertRaisesRegex(
-        ValueError, 'Transcript ID wrong_transcript_id not found'
-    ):
-      extractor.extract(transcript_id='wrong_transcript_id')
+    exons = extractor.extract(transcript_id='wrong_transcript_id')
+    self.assertEmpty(exons)
 
 
 if __name__ == '__main__':
