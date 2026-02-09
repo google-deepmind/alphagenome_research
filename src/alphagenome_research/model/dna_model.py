@@ -1076,11 +1076,11 @@ def default_organism_settings() -> (
           pas_feather_path=None,
           splice_site_starts_feather_path=(
               'https://storage.googleapis.com/alphagenome/reference/gencode/'
-              'mm10/gencode.vM38.splice_sites_starts.feather'
+              'mm10/gencode.vM23.splice_sites_starts.feather'
           ),
           splice_site_ends_feather_path=(
               'https://storage.googleapis.com/alphagenome/reference/gencode/'
-              'mm10/gencode.vM38.splice_sites_ends.feather'
+              'mm10/gencode.vM23.splice_sites_ends.feather'
           ),
       ),
   }
