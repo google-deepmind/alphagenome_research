@@ -691,8 +691,8 @@ class AlphaGenomeModel(dna_model.DnaModel):
       predictions = self._predict(
           self._params,
           self._state,
-          sequence,
-          organism_indices,
+          jax.device_put(sequence, device),
+          jax.device_put(organism_indices, device),
           negative_strand_mask=jax.device_put(
               np.asarray([interval.negative_strand]), device
           ),
