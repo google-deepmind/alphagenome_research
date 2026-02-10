@@ -147,7 +147,7 @@ class PolyadenylationTest(parameterized.TestCase):
             'Start',
             'End',
             'interval_start',
-            'Strand',
+            'strand',
             'gene_name',
             'gene_id',
             'gene_type',

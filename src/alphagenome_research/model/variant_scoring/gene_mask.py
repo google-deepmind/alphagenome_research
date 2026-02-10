@@ -163,7 +163,7 @@ class GeneVariantScorer(
     output_metadata = track_metadata.get(settings.requested_output)
     assert isinstance(output_metadata, track_data.TrackMetadata)
     strand_mask = (
-        np.asarray(mask_metadata['Strand'].values)[:, None]
+        np.asarray(mask_metadata['strand'].values)[:, None]
         == output_metadata['strand'].values[None]
     ) | (output_metadata['strand'].values[None] == '.')
 

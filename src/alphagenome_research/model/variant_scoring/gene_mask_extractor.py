@@ -122,7 +122,7 @@ class _GeneAnnotation:
     """Returns the metadata as a DataFrame."""
     return pd.DataFrame({
         'gene_id': self.gene_id,
-        'Strand': self.strand,
+        'strand': self.strand,
         'gene_name': self.gene_name,
         'gene_type': self.gene_type,
         'interval_start': self.interval_start,

@@ -46,7 +46,7 @@ def _create_empty(mask_metadata: pd.DataFrame, track_metadata: pd.DataFrame):
       var=pd.DataFrame({
           'strand': '.',
           'name': track_metadata['name'],
-          'gtex_tissue': track_metadata['gtex_tissue'],
+          'gtex_tissue': track_metadata.get('gtex_tissue'),
           'ontology_curie': track_metadata.get('ontology_curie'),
           'biosample_type': track_metadata.get('biosample_type'),
           'biosample_name': track_metadata.get('biosample_name'),
@@ -287,7 +287,12 @@ class SpliceJunctionVariantScorer(variant_scoring.VariantScorer):
 
     junction_scores = (
         pyranges.PyRanges(delta_counts)
-        .join(pyranges.PyRanges(mask_metadata), strandedness='same')
+        .join(
+            pyranges.PyRanges(
+                mask_metadata.rename(columns={'strand': 'Strand'})
+            ),
+            strandedness='same',
+        )
         .df
     )
 

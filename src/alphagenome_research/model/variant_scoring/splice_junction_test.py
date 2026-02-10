@@ -112,7 +112,7 @@ class SpliceJunctionVariantScorerTest(parameterized.TestCase):
     self.assertIsNone(masks)
     self.assertIsInstance(metadata, pd.DataFrame)
     self.assertContainsSubset(
-        ['gene_id', 'Strand', 'Chromosome', 'Start', 'End', 'interval'],
+        ['gene_id', 'strand', 'Chromosome', 'Start', 'End', 'interval'],
         metadata.columns,
     )
     # We expect to retrieve metadata for 2 genes overlapping the variant.
@@ -224,7 +224,7 @@ class SpliceJunctionVariantScorerTest(parameterized.TestCase):
         'junction_Start',
         'junction_End',
         'gene_id',
-        'Strand',
+        'strand',
         'Chromosome',
     ]:
       self.assertIn(column, results.obs.columns)

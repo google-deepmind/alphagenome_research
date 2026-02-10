@@ -89,10 +89,9 @@ class GeneIntervalScorerTest(parameterized.TestCase):
         interval, settings=settings, track_metadata=track_metadata
     )
     self.assertIsInstance(metadata, pd.DataFrame)
-    self.assertIn('Strand', metadata.columns)
-    self.assertIn('gene_name', metadata.columns)
-    self.assertIn('gene_id', metadata.columns)
-    self.assertIn('gene_type', metadata.columns)
+    self.assertContainsSubset(
+        ['strand', 'gene_name', 'gene_id', 'gene_type'], metadata.columns
+    )
 
     self.assertEqual(masks.shape[0], interval.width)
 

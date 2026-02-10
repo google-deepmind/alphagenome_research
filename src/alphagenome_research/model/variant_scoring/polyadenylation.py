@@ -134,7 +134,7 @@ class PolyadenylationVariantScorer(variant_scoring.VariantScorer):
       if gene_id not in self._pas_per_gene:
         continue
       gene_pas = self._pas_per_gene[gene_id]
-      gene_pas = gene_pas[gene_pas['pas_strand'] == gene_row['Strand']]
+      gene_pas = gene_pas[gene_pas['pas_strand'] == gene_row['strand']]
       if (
           gene_pas.shape[0] == 0
           # Check at least 80% of a gene's PAS sites fall within the interval.
