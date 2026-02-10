@@ -734,7 +734,7 @@ class AlphaGenomeModel(dna_model.DnaModel):
             mask_metadata=metadata,
             settings=scorer_settings,
         )
-        result.uns['scored_interval'] = interval
+        result.uns['interval'] = interval
         result.uns['interval_scorer'] = scorer_settings
         results.append(result)
 
@@ -846,7 +846,7 @@ class AlphaGenomeModel(dna_model.DnaModel):
             mask_metadata=metadata,
             settings=scorer_settings,
         )
-        result.uns['scored_interval'] = interval
+        result.uns['interval'] = interval
         result.uns['variant'] = variant
         result.uns['variant_scorer'] = scorer_settings
         results.append(result)

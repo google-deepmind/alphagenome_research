@@ -47,7 +47,7 @@ def _create_mock_gtf() -> pd.DataFrame:
       'Start': [101, 101, 102, 103, 0, 0, 0, 80],
       'End': [200, 200, 200, 200, 108, 108, 40, 108],
       'Strand': ['+', '+', '+', '+', '-', '-', '-', '-'],
-      'transcript_id': [None, None, 'T2', 'T2', None, 'T4', 'T4', 'T4'],
+      'transcript_id': [None, 'T1', 'T2', 'T2', None, 'T4', 'T4', 'T4'],
       'gene_id': ['G1', 'G1', 'G1', 'G1', 'G2', 'G2', 'G2', 'G2'],
       'Feature': [
           'gene',
@@ -489,13 +489,38 @@ class DnaModelTest(parameterized.TestCase):
             aggregation_type=variant_scorers.AggregationType.DIFF_LOG2_SUM,
         ),
         variant_scorers.ContactMapScorer(),
+        variant_scorers.GeneMaskLFCScorer(
+            requested_output=dna_output.OutputType.ATAC
+        ),
+        variant_scorers.SpliceJunctionScorer(),
     ]
     output = model.score_variant(interval, variant, variant_scorers=scorers)
     self.assertLen(output, len(scorers))
     for result, scorer in zip(output, scorers):
-      self.assertEqual(result.uns['scored_interval'], interval)
+      self.assertEqual(result.uns['interval'], interval)
       self.assertEqual(result.uns['variant'], variant)
       self.assertEqual(result.uns['variant_scorer'], scorer)
+
+    df = variant_scorers.tidy_scores(output)
+    self.assertCountEqual(
+        [
+            'variant_id',
+            'scored_interval',
+            'gene_id',
+            'gene_name',
+            'gene_type',
+            'gene_strand',
+            'junction_Start',
+            'junction_End',
+            'output_type',
+            'variant_scorer',
+            'track_name',
+            'track_strand',
+            'ontology_curie',
+            'raw_score',
+        ],
+        df.columns,
+    )
 
   def test_missing_gtf_raises_scorer_missing_error(self):
     mock_fasta_extractor = mock.create_autospec(fasta.FastaExtractor)
@@ -568,7 +593,7 @@ class DnaModelTest(parameterized.TestCase):
     output = model.score_interval(interval, interval_scorers=scorers)
     self.assertLen(output, len(scorers))
     for result, scorer in zip(output, scorers):
-      self.assertEqual(result.uns['scored_interval'], interval)
+      self.assertEqual(result.uns['interval'], interval)
       self.assertEqual(result.uns['interval_scorer'], scorer)
 
   @parameterized.parameters([
