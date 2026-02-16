@@ -28,7 +28,7 @@ from alphagenome_research.model import splicing
 from alphagenome_research.model.metadata import metadata as metadata_lib
 import haiku as hk
 import jax
-from jaxtyping import Array, Float, Int, PyTree  # pylint: disable=g-importing-member, g-multiple-import
+from jaxtyping import Array, Float, Int, PyTree, Shaped  # pylint: disable=g-importing-member, g-multiple-import
 
 
 DEFAULT_NUM_SPLICE_SITES = 512
@@ -184,9 +184,7 @@ class AlphaGenome(hk.Module):
       self,
       dna_sequence: Float[Array, 'B S 4'],
       organism_index: Int[Array, 'B'],
-  ) -> tuple[
-      PyTree[Float[Array, 'B ...'] | None], embeddings_module.Embeddings
-  ]:
+  ) -> tuple[PyTree[Shaped[Array, 'B ...']], embeddings_module.Embeddings]:
     """Encodes a sequence of DNA and makes predictions for various heads.
 
     Args:
@@ -265,10 +263,10 @@ class AlphaGenome(hk.Module):
     return predictions, embeddings
 
   @typing.jaxtyped
-  def loss(self, batch: schemas.DataBatch) -> tuple[
-      Float[Array, ''],
-      PyTree[Float[Array, '']],
-      PyTree[Float[Array, 'B ...'] | None],
+  def loss(
+      self, batch: schemas.DataBatch
+  ) -> tuple[
+      Float[Array, ''], PyTree[Float[Array, '']], PyTree[Shaped[Array, 'B ...']]
   ]:
     """Returns the loss for the model."""
     predictions, _ = self(batch.dna_sequence, batch.get_organism_index())

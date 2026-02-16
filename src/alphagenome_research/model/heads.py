@@ -35,7 +35,7 @@ import chex
 import haiku as hk
 import jax
 import jax.numpy as jnp
-from jaxtyping import Array, ArrayLike, Bool, Float, Int, PyTree  # pylint: disable=g-importing-member, g-multiple-import
+from jaxtyping import Array, ArrayLike, Bool, Float, Int, PyTree, Shaped  # pylint: disable=g-importing-member, g-multiple-import
 import numpy as np
 
 _SOFT_CLIP_VALUE = 10.0
@@ -423,7 +423,7 @@ class Head(metaclass=abc.ABCMeta):
       embeddings: embeddings_module.Embeddings,
       organism_index: Int[Array, 'B'],
       **kwargs,
-  ) -> PyTree[Float[Array, 'B ...'] | None]:
+  ) -> PyTree[Shaped[Array, 'B ...'] | None]:
     """Calls the head's predict function as a module."""
     return hk.to_module(self.predict)(self._name)(
         embeddings, organism_index, **kwargs
@@ -435,13 +435,13 @@ class Head(metaclass=abc.ABCMeta):
       embeddings: embeddings_module.Embeddings,
       organism_index: Int[Array, 'B'],
       **kwargs,
-  ) -> PyTree[Float[Array, 'B ...'] | None]:
+  ) -> PyTree[Shaped[Array, 'B ...'] | None]:
     """Returns the predictions for the head."""
 
   @abc.abstractmethod
   def loss(
       self,
-      predictions: PyTree[Float[Array, 'B ...']],
+      predictions: PyTree[Shaped[Array, 'B ...']],
       batch: schemas.DataBatch,
   ) -> PyTree[Float[Array, '']]:
     """Returns the loss for the head."""
@@ -960,7 +960,7 @@ class SpliceSitesJunctionHead(Head):
       embeddings: embeddings_module.Embeddings,
       organism_index: Int[Array, 'B'],
       **kwargs,
-  ) -> PyTree[Float[Array, 'B ...'] | None]:
+  ) -> PyTree[Shaped[Array, 'B ...'] | None]:
     """Predicts splice site junctions from embeddings."""
     if (splice_site_positions := kwargs.get('splice_site_positions')) is None:
       raise ValueError(
@@ -978,7 +978,7 @@ class SpliceSitesJunctionHead(Head):
 
   def loss(
       self,
-      predictions: PyTree[Float[Array, 'B ...']],
+      predictions: PyTree[Shaped[Array, 'B ...']],
       batch: schemas.DataBatch,
   ) -> PyTree[Float[Array, '']]:
     """Returns the loss for the head."""
