@@ -19,6 +19,7 @@ from alphagenome.data import ontology
 from alphagenome.models import dna_model
 from alphagenome.models import dna_output
 from alphagenome_research.model.metadata import metadata as metadata_lib
+import chex
 import jax
 import numpy as np
 import pandas as pd
@@ -36,6 +37,14 @@ class MetadataTest(parameterized.TestCase):
     reindexing = metadata.strand_reindexing
     self.assertIsInstance(reindexing, dict)
     self.assertCountEqual(dna_output.OutputType, reindexing.keys())
+
+  def test_organism_shapes_match(self):
+    metadata = tuple(metadata_lib.load(o) for o in dna_model.Organism)
+    for output_type in dna_output.OutputType:
+      with self.subTest(f'{output_type=}'):
+        track_metadata = tuple(m.get(output_type).values for m in metadata)
+        # Only assert the first track dimension matches, as fields may differ.
+        chex.assert_equal_shape_prefix(track_metadata, 1)
 
   @parameterized.named_parameters([
       dict(
