@@ -86,6 +86,8 @@ def create_head(
     metadata: Mapping[
         dna_model.Organism, metadata_lib.AlphaGenomeOutputMetadata
     ],
+    *,
+    num_organisms: int | None = None,
 ) -> 'Head':
   match config.type:
     case HeadType.GENOME_TRACKS:
@@ -97,30 +99,35 @@ def create_head(
           resolutions=config.resolutions,
           apply_squashing=config.apply_squashing,
           bundle=config.bundle,
+          num_organisms=num_organisms,
       )
     case HeadType.CONTACT_MAPS:
       return ContactMapsHead(
           name=config.name,
           output_type=config.output_type,
           metadata=metadata,
+          num_organisms=num_organisms,
       )
     case HeadType.SPLICE_SITES_CLASSIFICATION:
       return SpliceSitesClassificationHead(
           name=config.name,
           output_type=config.output_type,
           metadata=metadata,
+          num_organisms=num_organisms,
       )
     case HeadType.SPLICE_SITES_USAGE:
       return SpliceSitesUsageHead(
           name=config.name,
           output_type=config.output_type,
           metadata=metadata,
+          num_organisms=num_organisms,
       )
     case HeadType.SPLICE_SITES_JUNCTION:
       return SpliceSitesJunctionHead(
           name=config.name,
           output_type=config.output_type,
           metadata=metadata,
+          num_organisms=num_organisms,
       )
     case _:
       raise ValueError(f'Unknown head type: {config.type}')
@@ -353,6 +360,7 @@ class Head(metaclass=abc.ABCMeta):
           dna_model.Organism,
           metadata_lib.AlphaGenomeOutputMetadata,
       ],
+      num_organisms: int | None = None,
   ):
     """Initializes the Head class.
 
@@ -363,13 +371,17 @@ class Head(metaclass=abc.ABCMeta):
         should be a ordered aligned with the organism index. E.g.,
         organism_index=0 should correspond to the first organism in the metadata
         dictionary.
+      num_organisms: Optional number of organisms. If not provided, the number
+        of organisms will be inferred from the metadata.
     """
 
     self._name = name
     self._output_type = output_type
     self._metadata = metadata
-    self._num_organisms = len(metadata)
-    if self._num_organisms == 0:
+    self._num_organisms = (
+        num_organisms if num_organisms is not None else len(metadata)
+    )
+    if not self._metadata:
       raise ValueError('No metadata provided for any organism.')
     self._num_tracks = self._get_num_tracks()
 
@@ -404,7 +416,7 @@ class Head(metaclass=abc.ABCMeta):
   @typing.jaxtyped
   def get_multi_organism_track_mask(
       self,
-  ) -> Bool[Array, '{self._num_organisms} {self.num_tracks}']:
+  ) -> Bool[Array, '{len(self._metadata)} {self.num_tracks}']:
     """Returns the track mask for all organisms."""
     track_masks = []
     for organism in self._metadata.keys():
@@ -467,6 +479,7 @@ class GenomeTracksHead(Head):
           dna_model.Organism,
           metadata_lib.AlphaGenomeOutputMetadata,
       ],
+      num_organisms: int | None = None,
   ):
     """Initializes the BaseResolutionHead module.
 
@@ -487,11 +500,15 @@ class GenomeTracksHead(Head):
         column, these values are used to scale predictions and targets.
         Otherwise, scaling is omitted. Note that squashing is only applied if
         `apply_squashing` is True.
+      num_organisms: Optional number of organisms. If not provided, the number
+        of organisms will be inferred from the metadata.
     """
+
     super().__init__(
         name=name,
         output_type=output_type,
         metadata=metadata,
+        num_organisms=num_organisms,
     )
     self._apply_squashing = apply_squashing
     self._resolutions = sorted(resolutions)
@@ -819,12 +836,14 @@ class SpliceSitesJunctionHead(Head):
           dna_model.Organism,
           metadata_lib.AlphaGenomeOutputMetadata,
       ],
+      num_organisms: int | None = None,
   ):
     """Initializes the SpliceSitesJunctionHead module."""
     super().__init__(
         name=name,
         output_type=output_type,
         metadata=metadata,
+        num_organisms=num_organisms,
     )
     self._hidden_dim = 768
     self._max_position_encoding_distance = int(2**20)

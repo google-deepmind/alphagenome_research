@@ -147,7 +147,9 @@ class AlphaGenome(hk.Module):
             ' missing tracks.'
         )
       self._heads[head] = heads_module.create_head(
-          heads_module.get_head_config(head), self._output_metadata
+          heads_module.get_head_config(head),
+          self._output_metadata,
+          num_organisms=num_organisms,
       )
 
   @hk.name_like('__call__')
