@@ -667,9 +667,20 @@ class DnaModelTest(parameterized.TestCase):
     for expected, scores in zip(expected_variants, scores, strict=True):
       self.assertEqual(expected, scores[0].uns['variant'])
 
-  def test_create(self):
+  @parameterized.parameters(
+      dict(model_metadata=None),
+      dict(
+          model_metadata=metadata.AlphaGenomeOutputMetadata(
+              atac=metadata.load(dna_model.Organism.HOMO_SAPIENS).atac,
+              dnase=metadata.load(dna_model.Organism.HOMO_SAPIENS).dnase,
+          )
+      ),
+  )
+  def test_create(
+      self, model_metadata: metadata.AlphaGenomeOutputMetadata | None
+  ):
     init_fn, _, _ = dna_model.create_model(
-        {dna_model.Organism.HOMO_SAPIENS: self._metadata}
+        {o: metadata.load(o) for o in dna_model.Organism}
     )
     params, state = jax.jit(init_fn)(
         jax.random.PRNGKey(0),
@@ -695,6 +706,7 @@ class DnaModelTest(parameterized.TestCase):
     splice_starts.to_feather(splice_starts_path)
     splice_ends.to_feather(splice_ends_path)
     checkpointer.wait_until_finished()
+
     model = dna_model.create(
         checkpoint_dir,
         organism_settings={
@@ -704,7 +716,7 @@ class DnaModelTest(parameterized.TestCase):
                 pas_feather_path=polya_gtf_path,
                 splice_site_starts_feather_path=splice_starts_path,
                 splice_site_ends_feather_path=splice_ends_path,
-                metadata=self._metadata,
+                metadata=model_metadata,
             )
         },
         device=jax.local_devices()[0],

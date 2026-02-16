@@ -1192,13 +1192,14 @@ def create(
   splice_site_extractors = {}
   gtfs = {}
   pas_gtfs = {}
+  validate_checkpoint = True
 
   for organism, settings in organism_settings.items():
-    metadata[organism] = (
-        settings.metadata
-        if settings.metadata is not None
-        else metadata_lib.load(organism)
-    )
+    if settings.metadata is not None:
+      metadata[organism] = settings.metadata
+      validate_checkpoint = False
+    else:
+      metadata[organism] = metadata_lib.load(organism)
 
     if settings.fasta_path is not None:
       fasta_extractors[organism] = fasta.FastaExtractor(settings.fasta_path)
@@ -1226,12 +1227,14 @@ def create(
 
   dna_sequence_shape = jax.ShapeDtypeStruct((1, 2048, 4), dtype=jnp.float32)
   organism_index_shape = jax.ShapeDtypeStruct((1,), dtype=jnp.int32)
-  params_shapes, state_shapes = jax.eval_shape(
+  target_shapes = jax.eval_shape(
       init_fn, jax.random.PRNGKey(0), dna_sequence_shape, organism_index_shape
   )
   checkpointer = ocp.StandardCheckpointer()
   params, state = checkpointer.restore(
-      checkpoint_path, target=(params_shapes, state_shapes), strict=True
+      checkpoint_path,
+      target=target_shapes if validate_checkpoint else None,
+      strict=validate_checkpoint,
   )
 
   return AlphaGenomeModel(
@@ -1254,7 +1257,7 @@ def create_from_kaggle(
     model_version: str | ModelVersion,
     *,
     organism_settings: (
-        Mapping[dna_model.Organism, AlphaGenomeOutputMetadata] | None
+        Mapping[dna_model.Organism, OrganismSettings] | None
     ) = None,
     device: jax.Device | None = None,
 ) -> AlphaGenomeModel:
@@ -1288,7 +1291,7 @@ def create_from_huggingface(
     model_version: str | ModelVersion,
     *,
     organism_settings: (
-        Mapping[dna_model.Organism, AlphaGenomeOutputMetadata] | None
+        Mapping[dna_model.Organism, OrganismSettings] | None
     ) = None,
     device: jax.Device | None = None,
 ) -> AlphaGenomeModel:
