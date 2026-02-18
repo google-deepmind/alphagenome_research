@@ -86,6 +86,16 @@ class VariantTest(parameterized.TestCase):
     )
     self.assertEqual(alternate_sequence, expected)
 
+  def test_insert_alternate_variant_negative_strand_raises(self):
+    with self.assertRaisesRegex(
+        ValueError, 'Interval must not be on the negative strand.'
+    ):
+      _ = genome_io.insert_alternate_variant(
+          sequence='AAAA',
+          interval=genome.Interval('chr1', 0, 4, '-'),
+          variant=genome.Variant('chr1', 2, 'A', 'G'),
+      )
+
   @parameterized.named_parameters([
       dict(
           testcase_name='Normal',
@@ -142,6 +152,16 @@ class VariantTest(parameterized.TestCase):
     )
     self.assertEqual(reference_sequence, expected)
 
+  def test_insert_reference_variant_negative_strand_raises(self):
+    with self.assertRaisesRegex(
+        ValueError, 'Interval must not be on the negative strand.'
+    ):
+      _ = genome_io.insert_reference_variant(
+          sequence='AAAA',
+          interval=genome.Interval('chr1', 0, 4, '-'),
+          variant=genome.Variant('chr1', 2, 'A', 'G'),
+      )
+
   @parameterized.named_parameters([
       dict(
           testcase_name='Normal',
@@ -182,6 +202,14 @@ class VariantTest(parameterized.TestCase):
           variant=genome.Variant('chr4', 6, 'T', 'T'),
           expected_reference='GGGG',
           expected_alternate='GGGG',
+      ),
+      dict(
+          testcase_name='NegativeStrand',
+          sequence='AAAAA',
+          interval=genome.Interval('chr1', 0, 5, '-'),
+          variant=genome.Variant('chr1', 2, 'A', 'G'),
+          expected_reference='TTTTT',
+          expected_alternate='TTTCT',
       ),
   ])
   def test_extract_variant_sequences(

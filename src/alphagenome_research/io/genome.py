@@ -34,6 +34,9 @@ def insert_reference_variant(
     Sequence of the same length as input `sequence`, but with variant.REF
       integrated in case it mismatches it.
   """
+  if interval.negative_strand:
+    raise ValueError('Interval must not be on the negative strand.')
+
   if not variant.reference_overlaps(interval):
     return sequence
 
@@ -67,6 +70,9 @@ def insert_alternate_variant(
     DNA sequence with integrated variant. Length of the sequence might be
     be different from the input sequence.
   """
+  if interval.negative_strand:
+    raise ValueError('Interval must not be on the negative strand.')
+
   if not (
       variant.reference_overlaps(interval)
       or (not variant.reference_bases and variant.alternate_overlaps(interval))
@@ -114,16 +120,20 @@ def extract_variant_sequences(
   extended_length = max(
       0, len(variant.reference_bases) - len(variant.alternate_bases)
   )
-  extended_interval = interval.boundary_shift(
-      end_offset=extended_length, use_strand=False
+  extended_unstranded_interval = interval.as_unstranded().boundary_shift(
+      end_offset=extended_length
   )
 
-  sequence = extractor.extract(extended_interval)
-  return (
-      insert_reference_variant(sequence, extended_interval, variant)[
-          :interval_length
-      ],
-      insert_alternate_variant(sequence, extended_interval, variant)[
-          :interval_length
-      ],
-  )
+  sequence = extractor.extract(extended_unstranded_interval)
+  reference_sequence = insert_reference_variant(
+      sequence, extended_unstranded_interval, variant
+  )[:interval_length]
+  alternate_sequence = insert_alternate_variant(
+      sequence, extended_unstranded_interval, variant
+  )[:interval_length]
+
+  if interval.negative_strand:
+    reference_sequence = fasta.reverse_complement(reference_sequence)
+    alternate_sequence = fasta.reverse_complement(alternate_sequence)
+
+  return reference_sequence, alternate_sequence
