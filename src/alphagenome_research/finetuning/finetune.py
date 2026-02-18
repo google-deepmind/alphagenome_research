@@ -40,8 +40,9 @@ def get_dataset_iterator(
     output_metadata: metadata_lib.AlphaGenomeOutputMetadata,
     model_version: dna_model.ModelVersion,
     subset: fold_intervals.Subset,
-    fasta_path: str = _FASTA_PATH,
     organism: dna_model.Organism = dna_model.Organism.HOMO_SAPIENS,
+    fasta_path: str = _FASTA_PATH,
+    example_regions_path: str | None = None,
 ) -> Iterator[schemas.DataBatch]:
   """Converts pipeline output dict to a DataBatch schema.
 
@@ -51,13 +52,19 @@ def get_dataset_iterator(
     output_metadata: Metadata for the output tracks for each organism.
     model_version: The model version to use.
     subset: The subset of the dataset.
-    fasta_path: The path to the reference genome FASTA file.
     organism: The organism to use.
+    fasta_path: The path to the reference genome FASTA file.
+    example_regions_path: The path to the example regions BED file.
 
   Returns:
     A schemas.DataBatch object.
   """
-  intervals = fold_intervals.get_fold_intervals(model_version, organism, subset)
+  intervals = fold_intervals.get_fold_intervals(
+      model_version,
+      organism,
+      subset,
+      example_regions_path=example_regions_path,
+  )
   pipeline = dataset_lib.DataPipeline(
       fasta_path=fasta_path,
       intervals=intervals,
