@@ -181,6 +181,7 @@ def _predict_variant(
     reference_sequences: Float32[Array, 'B S 4'],
     alternate_sequences: Float32[Array, 'B S 4'],
     splice_sites: Bool[Array, 'B S 5'] | None,
+    reference_gene_mask: Bool[Array, 'B S 1'],
     organism_indices: Int32[Array, 'B'],
     strand_reindexing: Mapping[dna_output.OutputType, Int32[Array, '_']],
     negative_strand_mask: Bool[Array, 'B'],
@@ -210,10 +211,20 @@ def _predict_variant(
       alternate_sequences,
       organism_indices,
   )
+  reference_splice_sites = (
+      reference_predictions['splice_sites_classification']['predictions']
+      * reference_gene_mask
+  )
+  alternate_splice_sites = alternate_predictions['splice_sites_classification'][
+      'predictions'
+  ]
+  if alternate_splice_sites is not None:
+    alternate_splice_sites = alternate_splice_sites * reference_gene_mask
+
   # Get union of splice site positions across ref and alt.
   ref_and_alt_splice_site_positions = splicing.generate_splice_site_positions(
-      ref=reference_predictions['splice_sites_classification']['predictions'],
-      alt=alternate_predictions['splice_sites_classification']['predictions'],
+      ref=reference_splice_sites,
+      alt=alternate_splice_sites,
       splice_sites=splice_sites,
       k=num_splice_sites,
       pad_to_length=num_splice_sites,
@@ -419,6 +430,7 @@ class AlphaGenomeModel(dna_model.DnaModel):
       )
 
     self._variant_scorers = {}
+    self._gene_mask_extractors = {}
 
     for organism in metadata.keys():
       self._variant_scorers[organism]: dict[
@@ -432,6 +444,16 @@ class AlphaGenomeModel(dna_model.DnaModel):
           ),
       }
       if (gtf := gtfs.get(organism)) is not None:
+        self._gene_mask_extractors[organism] = (
+            gene_mask_extractor.GeneMaskExtractor(
+                gtf=gtf,
+                gene_query_type=(
+                    gene_mask_extractor.GeneQueryType.VARIANT_OVERLAPPING
+                ),
+                gene_mask_type=gene_mask_extractor.GeneMaskType.BODY,
+            )
+        )
+
         gene_scorer = gene_mask.GeneVariantScorer(
             gene_mask_extractor=gene_mask_extractor.GeneMaskExtractor(
                 gtf=gtf,
@@ -450,13 +472,7 @@ class AlphaGenomeModel(dna_model.DnaModel):
         self._variant_scorers[organism][
             variant_scorers_lib.BaseVariantScorer.GENE_MASK_SPLICING
         ] = gene_mask.GeneVariantScorer(
-            gene_mask_extractor=gene_mask_extractor.GeneMaskExtractor(
-                gtf=gtf,
-                gene_query_type=(
-                    gene_mask_extractor.GeneQueryType.VARIANT_OVERLAPPING
-                ),
-                gene_mask_type=gene_mask_extractor.GeneMaskType.BODY,
-            ),
+            gene_mask_extractor=self._gene_mask_extractors[organism]
         )
         self._variant_scorers[organism][
             variant_scorers_lib.BaseVariantScorer.SPLICE_JUNCTION
@@ -621,9 +637,17 @@ class AlphaGenomeModel(dna_model.DnaModel):
         requested_outputs=requested_outputs,
         requested_ontologies=ontology_terms,
     )
+
+    reference_gene_mask = np.ones((1, interval.width, 1), dtype=bool)
+    if extractor := self._gene_mask_extractors.get(organism):
+      mask, _ = extractor.extract(interval, variant)
+      if mask.size > 0:
+        reference_gene_mask = mask.max(-1, keepdims=True)[np.newaxis]
+
     splice_sites = None
     if splice_site_extractor := self._splice_site_extractors.get(organism):
       splice_sites = splice_site_extractor.extract(interval)[np.newaxis]
+      splice_sites *= reference_gene_mask
 
     with self._device_context as device, jax.transfer_guard('disallow'):
       reference_sequence = jax.device_put(
@@ -648,6 +672,7 @@ class AlphaGenomeModel(dna_model.DnaModel):
           reference_sequence,
           alternate_sequence,
           jax.device_put(splice_sites, device),
+          jax.device_put(reference_gene_mask, device),
           organism_indices,
           requested_outputs=requested_outputs,
           negative_strand_mask=jax.device_put(
@@ -795,9 +820,17 @@ class AlphaGenomeModel(dna_model.DnaModel):
     organism_indices = np.full(
         (1,), convert_to_organism_index(organism), dtype=np.int32
     )
+
+    reference_gene_mask = np.zeros((1, interval.width, 1), dtype=bool)
+    if extractor := self._gene_mask_extractors.get(organism):
+      mask, _ = extractor.extract(interval, variant)
+      if mask.size > 0:
+        reference_gene_mask = mask.max(-1, keepdims=True)[np.newaxis]
+
     splice_sites = None
     if splice_site_extractor := self._splice_site_extractors.get(organism):
       splice_sites = splice_site_extractor.extract(interval)[np.newaxis]
+      splice_sites *= reference_gene_mask
 
     requested_outputs = tuple(
         {scorer.requested_output for scorer in variant_scorers}
@@ -818,6 +851,7 @@ class AlphaGenomeModel(dna_model.DnaModel):
           jax.device_put(reference_sequence, device),
           jax.device_put(alternate_sequence, device),
           jax.device_put(splice_sites, device),
+          jax.device_put(reference_gene_mask, device),
           jax.device_put(organism_indices, device),
           requested_outputs=requested_outputs,
           negative_strand_mask=jax.device_put(
