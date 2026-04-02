@@ -58,15 +58,25 @@ def get_mock_output_metadata(
 ) -> metadata_lib.AlphaGenomeOutputMetadata:
   """Returns mock output metadata for the given organisms."""
 
-  def _make_metadata_df(total_tracks, num_tracks) -> track_data.TrackMetadata:
-    df_tracks = pd.DataFrame({
+  def _make_metadata_df(
+      total_tracks,
+      num_tracks,
+      strand=None,
+  ) -> track_data.TrackMetadata:
+    data = {
         'name': [f'track_{i}' for i in range(num_tracks)],
         'nonzero_mean': [1.0] * num_tracks,
-    })
-    df_padding = pd.DataFrame({
+    }
+    if strand is not None:
+      data['strand'] = strand[:num_tracks]
+    df_tracks = pd.DataFrame(data)
+    padding_data = {
         'name': ['padding'] * (total_tracks - num_tracks),
         'nonzero_mean': [0.0] * (total_tracks - num_tracks),
-    })
+    }
+    if strand is not None:
+      padding_data['strand'] = ['.'] * (total_tracks - num_tracks)
+    df_padding = pd.DataFrame(padding_data)
     return pd.concat([df_tracks, df_padding], ignore_index=True)
 
   def _make_junction_metadata_df(num_tissues) -> junction_data.JunctionMetadata:
@@ -75,10 +85,16 @@ def get_mock_output_metadata(
     })
 
   organism_idx = _ORGANSIM_INDEX[organism]
+  total_atac = max(_MOCK_ATAC_NUM_TRACKS)
+  n_atac = _MOCK_ATAC_NUM_TRACKS[organism_idx]
+  # Default strand layout: mix of +, -, and . strands.
+  atac_strands = (
+      ['+'] * (total_atac // 3)
+      + ['-'] * (total_atac // 3)
+      + ['.'] * (total_atac - 2 * (total_atac // 3))
+  )
   return metadata_lib.AlphaGenomeOutputMetadata(
-      atac=_make_metadata_df(
-          max(_MOCK_ATAC_NUM_TRACKS), _MOCK_ATAC_NUM_TRACKS[organism_idx]
-      ),
+      atac=_make_metadata_df(total_atac, n_atac, strand=atac_strands),
       chip_tf=_make_metadata_df(
           max(_MOCK_CHIP_TF_NUM_TRACKS),
           _MOCK_CHIP_TF_NUM_TRACKS[organism_idx],
@@ -674,6 +690,151 @@ class HeadsTest(parameterized.TestCase):
         apply_squashing=apply_squashing,
     )
     chex.assert_trees_all_close(input_data, unscaled_data, rtol=1e-5, atol=1e-5)
+
+  def test_cross_track_loss_is_finite(self):
+    """Gene loss with gene_loss_weight > 0 returns finite loss and aux keys."""
+    batch_size = 2
+    sequence_length = 2**17
+    num_tracks = max(_MOCK_ATAC_NUM_TRACKS)
+    num_genes = 3
+
+    organisms = (
+        dna_model.Organism.HOMO_SAPIENS,
+        dna_model.Organism.MUS_MUSCULUS,
+    )
+    metadata = {
+        organism: get_mock_output_metadata(organism) for organism in organisms
+    }
+
+    head = heads.GenomeTracksHead(
+        name='test_cross_track',
+        output_type=dna_output.OutputType.ATAC,
+        apply_squashing=False,
+        resolutions=[1],
+        bundle=bundles.BundleName.ATAC,
+        metadata=metadata,
+        gene_loss_weight=1.0,
+        gene_cross_track_weight=5.0,
+    )
+
+    rng = jax.random.PRNGKey(0)
+    rng_pred, rng_tgt = jax.random.split(rng)
+    scaled_preds = jax.random.uniform(
+        rng_pred, (batch_size, sequence_length, num_tracks), minval=0.1
+    )
+    targets = jax.random.uniform(
+        rng_tgt, (batch_size, sequence_length, num_tracks), minval=0.0
+    )
+    mask = jnp.ones((batch_size, 1, num_tracks), dtype=bool)
+
+    gene_mask = jnp.zeros(
+        (batch_size, sequence_length, 2, num_genes), dtype=bool
+    )
+    gene_mask = gene_mask.at[:, 10:50, 0, 0].set(True)
+    gene_mask = gene_mask.at[:, 100:200, 1, 1].set(True)
+    gene_mask = gene_mask.at[:, 300:350, 0, 2].set(True)
+
+    batch = schemas.DataBatch(
+        organism_index=jnp.zeros((batch_size,), dtype=jnp.int32),
+        atac=targets,
+        atac_mask=mask,
+        gene_mask=gene_mask,
+    )
+    preds_dict = {'scaled_predictions_1bp': scaled_preds}
+
+    result = head.loss(preds_dict, batch)
+    self.assertTrue(np.isfinite(result['loss']))
+    self.assertTrue(np.isfinite(result['gene_loss_total_count_1bp']))
+    self.assertTrue(np.isfinite(result['gene_loss_positional_1bp']))
+
+  def test_cross_track_loss_strand_filtering(self):
+    """Strand filtering with 3 tracks (+, -, .) and deterministic values."""
+    batch_size = 1
+    sequence_length = 2**17
+    num_tracks = 3
+    num_genes = 2
+
+    organisms = (
+        dna_model.Organism.HOMO_SAPIENS,
+        dna_model.Organism.MUS_MUSCULUS,
+    )
+
+    # Build minimal metadata: 3 ATAC tracks with strands +, -, .
+    def _make_3track_metadata(organism):  # pylint: disable=unused-argument
+      atac_df = pd.DataFrame({
+          'name': ['track_plus', 'track_minus', 'track_unstranded'],
+          'nonzero_mean': [1.0, 1.0, 1.0],
+          'strand': ['+', '-', '.'],
+      })
+      return metadata_lib.AlphaGenomeOutputMetadata(atac=atac_df)
+
+    metadata = {o: _make_3track_metadata(o) for o in organisms}
+
+    head = heads.GenomeTracksHead(
+        name='test_strand_3track',
+        output_type=dna_output.OutputType.ATAC,
+        apply_squashing=False,
+        resolutions=[1],
+        bundle=bundles.BundleName.ATAC,
+        metadata=metadata,
+        gene_loss_weight=1.0,
+        gene_cross_track_weight=5.0,
+    )
+
+    # Predictions: all ones.
+    scaled_preds = jnp.ones((batch_size, sequence_length, num_tracks))
+    # Targets: (1, 2, 3) per position across the 3 tracks.
+    targets = jnp.broadcast_to(
+        jnp.array([1.0, 2.0, 3.0]), (batch_size, sequence_length, num_tracks)
+    )
+    mask = jnp.ones((batch_size, 1, num_tracks), dtype=bool)
+
+    # Two short genes: gene 0 on positive strand, gene 1 on negative strand.
+    gene_mask = jnp.zeros(
+        (batch_size, sequence_length, 2, num_genes), dtype=bool
+    )
+    gene_mask = gene_mask.at[:, 10:20, 0, 0].set(True)  # pos-strand gene
+    gene_mask = gene_mask.at[:, 100:110, 1, 1].set(True)  # neg-strand gene
+
+    batch = schemas.DataBatch(
+        organism_index=jnp.zeros((batch_size,), dtype=jnp.int32),
+        atac=targets,
+        atac_mask=mask,
+        gene_mask=gene_mask,
+    )
+    preds_dict = {'scaled_predictions_1bp': scaled_preds}
+
+    result = head.loss(preds_dict, batch)
+
+    # Gene lengths: 10 for both active genes.
+    # predictions: 1.0. targets: (1.0, 2.0, 3.0) along channels.
+    # Gene 0 (pos-strand): tracks + and . are active (indices 0 and 2)
+    #   y_pred_0 = 1.0 + 1.0 = 2.0
+    #   y_true_0 = 1.0 + 3.0 = 4.0
+    # Gene 1 (neg-strand): tracks - and . are active (indices 1 and 2)
+    #   y_pred_1 = 1.0 + 1.0 = 2.0
+    #   y_true_1 = 2.0 + 3.0 = 5.0
+    def expected_poisson(y_true, y_pred):
+      return (y_pred - y_true * np.log(y_pred + 1e-7)) - (
+          y_true - y_true * np.log(y_true + 1e-7)
+      )
+
+    expected_loss_0 = expected_poisson(4.0, 2.0)
+    expected_loss_1 = expected_poisson(5.0, 2.0)
+
+    # The _safe_masked_mean averages the loss across the 2 valid genes natively.
+    avg_poisson = (expected_loss_0 + expected_loss_1) / 2.0
+
+    # Divide by the max number of active channels among all genes (2 active
+    # channels for both).
+    expected_total_count = avg_poisson / 2.0
+
+    self.assertAlmostEqual(
+        float(result['gene_loss_total_count_1bp']),
+        expected_total_count,
+        places=5,
+    )
+    self.assertTrue(np.isfinite(float(result['gene_loss_positional_1bp'])))
 
 
 if __name__ == '__main__':

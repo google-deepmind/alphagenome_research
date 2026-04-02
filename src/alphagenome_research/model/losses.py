@@ -23,7 +23,7 @@ from jaxtyping import Array, Bool, Float, PyTree  # pylint: disable=g-importing-
 
 
 @typing.jaxtyped
-def _safe_masked_mean(
+def safe_masked_mean(
     x: Float[Array, '*dims'],
     mask: Bool[Array, '#*dims'] | None = None,
 ) -> Float[Array, '']:
@@ -55,7 +55,7 @@ def poisson_loss(
   # Substract the minimum value such that loss is zero at optimal prediction.
   min_value = y_true - y_true * jnp.log(y_true + 1e-7)
   loss = (y_pred - y_true * y_pred_logits) - min_value
-  return _safe_masked_mean(loss, mask)
+  return safe_masked_mean(loss, mask)
 
 
 @typing.jaxtyped
@@ -109,7 +109,7 @@ def multinomial_loss(
 
   prob_predictions = y_pred.astype(jnp.float32) / (total_pred + 1e-7)
   loss_positional = -y_true * jnp.log(prob_predictions + 1e-7)
-  loss_positional = _safe_masked_mean(loss_positional, mask=mask)
+  loss_positional = safe_masked_mean(loss_positional, mask=mask)
 
   return {
       'loss': loss_total_count + positional_weight * loss_positional,
@@ -127,7 +127,7 @@ def mse(
     mask: Bool[Array, '#*dims'],
 ) -> Float[Array, '']:
   """Mean squared error."""
-  return _safe_masked_mean(jnp.square(y_pred - y_true), mask)
+  return safe_masked_mean(jnp.square(y_pred - y_true), mask)
 
 
 @typing.jaxtyped
@@ -144,7 +144,7 @@ def cross_entropy_loss_from_logits(
   )
   loss = -jnp.sum(y_true.astype(jnp.float32) * log_softmax_preds, axis=axis)
   mask = jnp.any(mask, axis=axis)
-  return _safe_masked_mean(loss, mask)
+  return safe_masked_mean(loss, mask)
 
 
 @typing.jaxtyped
@@ -160,7 +160,7 @@ def binary_crossentropy_from_logits(
       - y_pred * y_true
       + jnp.log1p(jnp.exp(-jnp.abs(y_pred)))
   )
-  return _safe_masked_mean(loss, mask)
+  return safe_masked_mean(loss, mask)
 
 
 @typing.jaxtyped
@@ -181,4 +181,4 @@ def cross_entropy_loss(
   log_normalizer = jnp.log((jnp.where(mask, y_pred, 0) + eps).sum(axis=axis))
   log_likelihood = (p_true * jnp.log(y_pred + eps)).sum(axis=axis)
   log_loss = log_normalizer - log_likelihood
-  return _safe_masked_mean(log_loss, mask.any(axis=axis))
+  return safe_masked_mean(log_loss, mask.any(axis=axis))

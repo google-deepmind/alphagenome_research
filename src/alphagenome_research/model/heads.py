@@ -238,8 +238,8 @@ def _sum_pool(
 
 @typing.jaxtyped
 def _get_param_for_index(
-    params: Float[ArrayLike, 'P ...'], index: Int[Array, 'B']
-) -> Float[ArrayLike, 'B ...']:
+    params: Shaped[ArrayLike, 'P ...'], index: Int[Array, 'B']
+) -> Shaped[ArrayLike, 'B ...']:
   """Returns a parameter for a specific index.
 
   Embeds the params into the graph.
@@ -480,6 +480,8 @@ class GenomeTracksHead(Head):
           metadata_lib.AlphaGenomeOutputMetadata,
       ],
       num_organisms: int | None = None,
+      gene_loss_weight: float = 0.0,
+      gene_cross_track_weight: float = 5.0,
   ):
     """Initializes the BaseResolutionHead module.
 
@@ -502,6 +504,10 @@ class GenomeTracksHead(Head):
         `apply_squashing` is True.
       num_organisms: Optional number of organisms. If not provided, the number
         of organisms will be inferred from the metadata.
+      gene_loss_weight: Weight of the cross-track gene-level loss. Set to 0 to
+        disable.
+      gene_cross_track_weight: Weight of the multinomial (positional) term in
+        the cross-track loss. Defaults to 5.0.
     """
 
     super().__init__(
@@ -513,6 +519,8 @@ class GenomeTracksHead(Head):
     self._apply_squashing = apply_squashing
     self._resolutions = sorted(resolutions)
     self._bundle = bundle
+    self._gene_loss_weight = gene_loss_weight
+    self._gene_cross_track_weight = gene_cross_track_weight
 
     def _get_track_means(organism: dna_model.Organism) -> Float[Array, 'C']:
       metadata = self.get_metadata(organism)
@@ -524,6 +532,54 @@ class GenomeTracksHead(Head):
     self._track_means = jnp.stack(
         [_get_track_means(organism) for organism in self._metadata.keys()]
     )
+
+    if self._gene_loss_weight > 0:
+
+      def _get_strand_channel_mask(
+          organism: dna_model.Organism,
+      ) -> Bool[Array, '2 1 C']:
+        """Returns a [2, 1, C] strand-channel mask from metadata.
+
+        For positive-strand genes (dim 0): includes '+' and '.' strands.
+        For negative-strand genes (dim 1): includes '-' and '.' strands.
+
+        Args:
+          organism: The organism for which to return the strand-channel mask.
+        """
+        metadata = self.get_metadata(organism)
+        if metadata is None:
+          raise ValueError(
+              f'gene_loss_weight > 0 requires track metadata for {organism},'
+              f' but none was found for output type {self._output_type}.'
+          )
+        if metadata.get('strand') is None:
+          raise ValueError(
+              "gene_loss_weight > 0 requires a 'strand' column in the"
+              f' track metadata for {organism} ({self._output_type}), but'
+              ' the column was not found. Available columns:'
+              f' {list(metadata.columns)}.'
+          )
+        strands = metadata['strand'].values
+        invalid_strands = set(strands) - {'+', '-', '.'}
+        if invalid_strands:
+          raise ValueError(
+              "Strand values must be '+', '-', or '.', but found: "
+              f'{invalid_strands}'
+          )
+        is_pos = (strands == '+') | (strands == '.')
+        is_neg = (strands == '-') | (strands == '.')
+        return jnp.stack(
+            [jnp.array(is_pos), jnp.array(is_neg)],
+        )[
+            :, None, :
+        ]  # [2, 1, C]
+
+      # [num_organisms, 2, 1, C] strand-channel mask.
+      self._strand_channel_mask = jnp.stack(
+          [_get_strand_channel_mask(o) for o in self._metadata.keys()]
+      )
+    else:
+      self._strand_channel_mask = None
 
   @typing.jaxtyped
   def unscale(
@@ -608,6 +664,7 @@ class GenomeTracksHead(Head):
       targets: Float[Array, 'B S C'],
       targets_mask: Bool[Array, 'B 1 C'] | None,
       resolution: int,
+      gene_mask: Bool[Array, 'B S 2 G'] | None = None,
   ) -> PyTree[Float[Array, '']]:
     """Computes the loss for the head at a given resolution."""
     chex.assert_equal_shape([predictions, targets])
@@ -619,7 +676,130 @@ class GenomeTracksHead(Head):
         positional_weight=5.0,
         multinomial_resolution=int(2**17) // resolution,
     )
+
+    if gene_mask is not None and self._gene_loss_weight > 0:
+      gene_loss, gene_aux = self._compute_cross_track_loss(
+          organism_index=organism_index,
+          predictions=predictions,
+          targets=scaled_targets,
+          targets_mask=targets_mask,
+          gene_mask=gene_mask,
+      )
+      all_losses = {**all_losses, **gene_aux}
+      all_losses['loss'] = (
+          all_losses['loss'] + self._gene_loss_weight * gene_loss
+      )
+
     return all_losses
+
+  @typing.jaxtyped
+  def _compute_cross_track_loss(
+      self,
+      *,
+      organism_index: Int[Array, 'B'],
+      predictions: Float[Array, 'B S C'],
+      targets: Float[Array, 'B S C'],
+      targets_mask: Bool[Array, 'B #S C'] | None,
+      gene_mask: Bool[Array, 'B S 2 G'],
+  ) -> tuple[Float[Array, ''], PyTree[Float[Array, '']]]:
+    """Computes the cross-track gene-level loss.
+
+    Aggregates predicted and target counts within gene boundaries, normalizes
+    by gene length, and computes a weighted sum of:
+    - Poisson NLL on total normalized expression per gene.
+    - Multinomial NLL on the distribution across tissues/cell types per gene.
+
+    Strand-channel filtering is applied using a pre-computed mask derived from
+    the metadata 'strand' column at init time. Positive-strand genes only
+    aggregate from '+' and '.' tracks, and negative-strand genes only aggregate
+    from '-' and '.' tracks.
+
+    Dimensions:
+      B: batch size
+      S: sequence length
+      C: number of channels (tracks)
+      G: number of genes
+
+    Args:
+      organism_index: Per-example organism index.
+      predictions: Scaled predictions (log poisson rate).
+      targets: Scaled targets.
+      targets_mask: Targets mask (broadcastable over sequence dim).
+      gene_mask: Gene mask. gene_mask[:, :, 0, :] marks positive-strand gene
+        regions; gene_mask[:, :, 1, :] marks negative-strand gene regions.
+
+    Returns:
+      A tuple (loss, aux_dict) where loss is the scalar combined loss and
+      aux_dict contains the individual loss components.
+    """
+    if self._strand_channel_mask is None:
+      raise ValueError('Cross-track gene loss requires strand-channel mask.')
+    chex.assert_rank(gene_mask, 4)  # [B, S, 2, G]
+
+    # Gene length: sum over sequence positions per gene per strand.
+    gene_length = jnp.sum(gene_mask.astype(jnp.float32), axis=-3)
+    safe_gene_length = jnp.maximum(gene_length[..., None], 1.0)  # [B, 2, G, 1]
+
+    # Aggregate predictions and targets within gene boundaries.
+    y_true = (
+        jnp.einsum('bsc,bs2g->b2gc', targets.astype(jnp.float32), gene_mask)
+        / safe_gene_length
+    )
+    y_pred = (
+        jnp.einsum('bsc,bs2g->b2gc', predictions.astype(jnp.float32), gene_mask)
+        / safe_gene_length
+    )
+
+    batch_size, *_, num_channels = predictions.shape
+    # Reduce targets_mask over sequence dim.
+    if targets_mask is not None:
+      targets_mask = jnp.max(
+          targets_mask.astype(jnp.float32), axis=-2, keepdims=True
+      )  # [B, 1, C]
+    else:
+      targets_mask = jnp.ones((batch_size, 1, num_channels))
+    # Combined mask: [B, 2, G, C]
+    combined_mask = (gene_length > 0)[..., None] * targets_mask.reshape(
+        batch_size, 1, 1, num_channels
+    )
+
+    # Strand-channel filtering from pre-computed metadata mask.
+    # _strand_channel_mask: [num_organisms, 2, 1, C]
+    strand_mask = _get_param_for_index(
+        self._strand_channel_mask, organism_index
+    )  # [B, 2, 1, C]
+    combined_mask = (combined_mask * strand_mask).astype(bool)
+
+    # Poisson loss on total counts per gene.
+    # Sum over channels (tissues) to get total expression. [B, 2, G, 1]
+    total_pred = jnp.einsum('b2gc,b2gc->b2g', y_pred, combined_mask)[..., None]
+    total_true = jnp.einsum('b2gc,b2gc->b2g', y_true, combined_mask)[..., None]
+
+    # Elementwise Poisson NLL on total counts (reduced across active genes).
+    loss_total_count = losses.poisson_loss(
+        y_true=total_true,
+        y_pred=total_pred,
+        mask=combined_mask.any(axis=-1, keepdims=True),
+    )
+
+    # Normalize by number of active channels per gene to keep magnitude
+    # invariant to channel count.
+    num_active = jnp.sum(
+        combined_mask.astype(jnp.float32), axis=-1, keepdims=True
+    )  # [B, 2, G, 1]
+    loss_total_count = loss_total_count / jnp.maximum(jnp.max(num_active), 1.0)
+
+    # Multinomial NLL on tissue distribution per gene.
+    prob_predictions = y_pred.astype(jnp.float32) / (total_pred + 1e-7)
+    loss_positional = -y_true * jnp.log(prob_predictions + 1e-7)
+    loss_positional = losses.safe_masked_mean(loss_positional, combined_mask)
+
+    loss = loss_total_count + self._gene_cross_track_weight * loss_positional
+    aux = {
+        'gene_loss_total_count': loss_total_count,
+        'gene_loss_positional': loss_positional,
+    }
+    return loss, aux
 
   @typing.jaxtyped
   def loss(
@@ -656,6 +836,7 @@ class GenomeTracksHead(Head):
           targets=targets,
           targets_mask=mask,
           resolution=resolution,
+          gene_mask=batch.gene_mask if resolution == 1 else None,
       )
       for k, v in all_losses.items():
         scalars[f'{k}_{resolution}bp'] = v

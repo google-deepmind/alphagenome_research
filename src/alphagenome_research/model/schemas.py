@@ -49,6 +49,7 @@ class DataBatch:
   splice_site_positions: Int[ArrayLike, 'B 4 P'] | None = None
   splice_site_usage: Float[ArrayLike, 'B S C_SPLICE_SITE_USAGE'] | None = None
   splice_sites: Bool[ArrayLike, 'B S C_SPLICE_SITES'] | None = None
+  gene_mask: Bool[ArrayLike, 'B S 2 G'] | None = None
 
   def get_organism_index(self) -> Int[ArrayLike, 'B']:
     """Returns the organism index data."""
