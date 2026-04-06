@@ -96,6 +96,21 @@ class CenterMaskVariantScorerTest(parameterized.TestCase):
       expected_mask[expected_start:expected_end] = True
     np.testing.assert_array_equal(masks, expected_mask)
 
+  def test_create_center_mask_uses_zero_based_variant_start(self):
+    interval = genome.Interval('chr1', 100, 200)
+    variant = genome.Variant('chr1', 151, '', '')
+
+    mask = center_mask.create_center_mask(
+        interval,
+        variant,
+        width=1,
+        resolution=1,
+    )
+
+    expected = np.zeros((100, 1), dtype=bool)
+    expected[50:51] = True
+    np.testing.assert_array_equal(mask, expected)
+
   @parameterized.product(
       [
           dict(

@@ -47,7 +47,7 @@ def create_center_mask(
     target_resolution_width = math.ceil(width / resolution)
 
     # Determine the position of the variant in the specified resolution.
-    base_resolution_center = variant.position - interval.start
+    base_resolution_center = variant.start - interval.start
     target_resolution_center = base_resolution_center // resolution
 
     # Compute start and end indices of the variant-centered mask.
