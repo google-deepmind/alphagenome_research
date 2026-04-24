@@ -50,6 +50,26 @@ class FastaExtractorTest(parameterized.TestCase):
     with self.assertRaisesRegex(ValueError, 'Chromosome "foo" not found.'):
       extractor.extract(genome.Interval('foo', 0, 10))
 
+  def test_sequence_names(self):
+    extractor = fasta.FastaExtractor(_get_test_fasta_path())
+    self.assertEqual(extractor.sequence_names, ['chr1', 'chr2'])
+
+  def test_get_length_for_sequence_name(self):
+    extractor = fasta.FastaExtractor(_get_test_fasta_path())
+    self.assertEqual(extractor.get_length_for_sequence_name('chr1'), 51)
+    self.assertEqual(extractor.get_length_for_sequence_name('chr2'), 78)
+
+  def test_get_length_for_invalid_name_raises(self):
+    extractor = fasta.FastaExtractor(_get_test_fasta_path())
+    with self.assertRaisesRegex(ValueError, 'Chromosome "foo" not found.'):
+      extractor.get_length_for_sequence_name('foo')
+
+  def test_contains(self):
+    extractor = fasta.FastaExtractor(_get_test_fasta_path())
+    self.assertIn('chr1', extractor)
+    self.assertIn('chr2', extractor)
+    self.assertNotIn('chr3', extractor)
+
 
 if __name__ == '__main__':
   absltest.main()

@@ -73,3 +73,18 @@ class FastaExtractor:
       return reverse_complement(sequence)
     else:
       return sequence
+
+  @property
+  def sequence_names(self) -> list[str]:
+    """Returns the list of all sequence (chromosome) names in the FASTA."""
+    return list(self._faidx.index.keys())
+
+  def get_length_for_sequence_name(self, name: str) -> int:
+    """Returns the length of the named sequence."""
+    if name not in self._faidx.index:
+      raise ValueError(f'Chromosome "{name}" not found.')
+    return self._faidx.index[name].rlen
+
+  def __contains__(self, name: str) -> bool:
+    """Returns True if the FASTA contains a sequence with the given name."""
+    return name in self._faidx.index
