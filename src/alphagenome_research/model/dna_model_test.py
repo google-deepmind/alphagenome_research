@@ -283,6 +283,59 @@ class DnaModelTest(parameterized.TestCase):
 
   @parameterized.parameters([
       dict(
+          requested_outputs=[
+              dna_output.OutputType.ATAC,
+              dna_output.OutputType.DNASE,
+          ],
+          requested_ontologies=None,
+          expected_shapes={
+              dna_output.OutputType.ATAC: (2048, 2),
+              dna_output.OutputType.DNASE: (2048, 1),
+          },
+      ),
+      dict(
+          requested_outputs=[
+              dna_output.OutputType.ATAC,
+              dna_output.OutputType.DNASE,
+          ],
+          requested_ontologies=[ontology.from_curie('CL:0000001')],
+          expected_shapes={
+              dna_output.OutputType.ATAC: (2048, 2),
+              dna_output.OutputType.DNASE: (2048, 0),
+          },
+      ),
+  ])
+  def test_predict_sequences(
+      self, requested_outputs, requested_ontologies, expected_shapes
+  ):
+    mock_fasta_extractor = mock.create_autospec(fasta.FastaExtractor)
+    mock_fasta_extractor.extract.side_effect = lambda x: 'A' * x.width
+    model = dna_model.AlphaGenomeModel(
+        params={},
+        state={},
+        apply_fn=self._mock_model,
+        junctions_apply_fn=self._mock_model_junctions,
+        metadata={dna_model.Organism.HOMO_SAPIENS: self._metadata},
+        fasta_extractors={
+            dna_model.Organism.HOMO_SAPIENS: mock_fasta_extractor
+        },
+        gtfs={dna_model.Organism.HOMO_SAPIENS: _create_mock_gtf()},
+        device=jax.local_devices()[0],
+    )
+    outputs = model.predict_sequences(
+        ['A' * 2048, 'C' * 2048],
+        requested_outputs=requested_outputs,
+        ontology_terms=requested_ontologies,
+    )
+    self.assertLen(outputs, 2)
+    for output in outputs:
+      for output_type, expected_shape in expected_shapes.items():
+        track_data = output.get(output_type)
+        self.assertIsNotNone(track_data)
+        chex.assert_shape(track_data.values, expected_shape)
+
+  @parameterized.parameters([
+      dict(
           requested_outputs=[dna_output.OutputType.ATAC],
           requested_ontologies=None,
           expected_shapes={dna_output.OutputType.ATAC: (2048, 2)},

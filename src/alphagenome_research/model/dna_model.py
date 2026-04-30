@@ -183,7 +183,6 @@ def _predict(
   )
   return predictions
 
-
 @typing.jaxtyped
 def _predict_variant(
     params: hk.Params,
@@ -323,6 +322,20 @@ def _upcast_single_batch_predictions(
 ]:
   """Helper to upcast and optionally transfer predictions to host."""
   x = jax.tree.map(lambda x: tensor_utils.upcast_floating(x[0]), x)
+  return jax.device_put(x, jax.memory.Space.Host) if transfer_to_host else x
+
+
+@functools.partial(jax.jit, static_argnames=['transfer_to_host'])
+@typing.jaxtyped
+def _upcast_batch_predictions(
+    x: PyTree[Float[Array, 'B ...'] | Int32[Array, 'B ...']],
+    *,
+    transfer_to_host: bool = True,
+) -> PyTree[
+    Float32[Array | np.ndarray, 'B ...'] | Int32[Array | np.ndarray, 'B ...']
+]:
+  """Helper to upcast batch predictions, preserving the batch dimension."""
+  x = jax.tree.map(tensor_utils.upcast_floating, x)
   return jax.device_put(x, jax.memory.Space.Host) if transfer_to_host else x
 
 
@@ -587,6 +600,91 @@ class AlphaGenomeModel(dna_model.DnaModel):
           metadata=metadata,
           interval=interval,
       )
+
+  def predict_sequences(
+      self,
+      sequences: Sequence[str],
+      *,
+      organism: dna_model.Organism = dna_model.Organism.HOMO_SAPIENS,
+      requested_outputs: Iterable[dna_output.OutputType],
+      ontology_terms: Iterable[ontology.OntologyTerm | str] | None,
+      interval: genome.Interval | None = None,
+  ) -> list[dna_output.Output]:
+    """Predicts for a batch of sequences.
+
+    Args:
+      sequences: A list of DNA sequences. All sequences must have the same
+        length.
+      organism: Organism to use for the prediction.
+      requested_outputs: The output types to predict.
+      ontology_terms: Optional ontology terms to filter tracks by.
+      interval: Optional interval to attach as metadata on each output.
+
+    Returns:
+      A list of Output, one per input sequence.
+
+    Raises:
+      ValueError: If sequences is empty or sequences have different lengths.
+    """
+    batch_size = len(sequences)
+    if batch_size == 0:
+      raise ValueError('sequences must be non-empty.')
+    lengths = {len(s) for s in sequences}
+    if len(lengths) > 1:
+      raise ValueError(
+          f'All sequences must have the same length, got lengths: {lengths}'
+      )
+
+    requested_outputs = tuple(set(requested_outputs))
+    if ontology_terms is not None:
+      ontology_terms = set(
+          ontology.from_curie(o) if isinstance(o, str) else o
+          for o in ontology_terms
+      )
+    metadata = self._metadata[organism]
+    track_masks = metadata_lib.create_track_masks(
+        metadata,
+        requested_outputs=set(requested_outputs),
+        requested_ontologies=ontology_terms,
+    )
+
+    with self._device_context as device, jax.transfer_guard('disallow'):
+      organism_indices = jax.device_put(
+          np.full((batch_size,), convert_to_organism_index(organism),
+                  dtype=np.int32),
+          device,
+      )
+      sequences = jax.device_put(
+          np.stack(
+              [np.asarray(self._one_hot_encoder.encode(s)) for s in sequences]
+          ),
+          device,
+      )
+      predictions = self._predict(
+          self._params,
+          self._state,
+          sequences,
+          organism_indices,
+          requested_outputs=requested_outputs,
+          negative_strand_mask=jax.device_put(
+              np.zeros(batch_size, dtype=bool), device
+          ),
+          strand_reindexing=jax.device_put(metadata.strand_reindexing, device),
+      )
+      predictions = _filter_predictions(
+          predictions, track_masks=jax.device_put(track_masks, device)
+      )
+      predictions = _upcast_batch_predictions(predictions)
+
+    return [
+      _construct_output_from_predictions(
+          jax.tree.map(lambda x, i=i: x[i], predictions),
+          track_masks=track_masks,
+          metadata=metadata,
+          interval=interval,
+      )
+      for i in range(batch_size)
+    ]
 
   def predict_interval(
       self,
