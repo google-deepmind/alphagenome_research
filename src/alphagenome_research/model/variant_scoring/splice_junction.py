@@ -17,6 +17,7 @@
 from alphagenome import typing
 from alphagenome.data import genome
 from alphagenome.data import junction_data
+from alphagenome.data import track_data
 from alphagenome.models import dna_output
 from alphagenome.models import variant_scorers
 from alphagenome_research.model.variant_scoring import gene_mask_extractor
@@ -80,7 +81,7 @@ def _create(
         gene_junction_scores[track_names].values.argmax(0)
     ]
     gene_max_scores.append(gene_junction_scores)
-  junction_scores = pd.concat(gene_max_scores)
+  junction_scores = pd.DataFrame(pd.concat(gene_max_scores))
   score_values = junction_scores[track_names].values
 
   # Merge junction information with mask metadata.
@@ -266,7 +267,10 @@ class SpliceJunctionVariantScorer(variant_scoring.VariantScorer):
       settings: variant_scorers.SpliceJunctionScorer,
   ) -> anndata.AnnData:
     """See base class."""
-    track_metadata = track_metadata.get(settings.requested_output)
+    track_metadata: track_data.TrackMetadata | None = track_metadata.get(
+        settings.requested_output
+    )
+    assert isinstance(track_metadata, track_data.TrackMetadata)
 
     if mask_metadata.empty:
       return _create_empty(mask_metadata, track_metadata)

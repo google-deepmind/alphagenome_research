@@ -139,7 +139,7 @@ class AugmentationTest(chex.TestCase, parameterized.TestCase):
   )
   def test_reverse_complement(self, mask: Sequence[bool]):
     sequence_length = 64
-    example = {
+    example: dict[dna_output.OutputType, PyTree[np.ndarray]] = {
         dna_output.OutputType.ATAC: (
             jnp.arange(sequence_length * 2, dtype=jnp.bfloat16).reshape(
                 1, sequence_length, 2

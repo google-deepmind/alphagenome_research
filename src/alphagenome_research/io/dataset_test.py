@@ -238,6 +238,8 @@ class LoadDataTest(parameterized.TestCase):
     num_batches = 0
     for batch, metadata in ds_iterator:
       self.assertIsInstance(batch, schemas.DataBatch)
+      self.assertIsNotNone(batch.dna_sequence)
+      self.assertIsNotNone(batch.organism_index)
       self.assertEqual(batch.dna_sequence.shape[0], batch_size)
       self.assertEqual(batch.organism_index.shape[0], batch_size)
       for bundle in requested_bundles:

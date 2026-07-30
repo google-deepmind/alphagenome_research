@@ -106,7 +106,7 @@ def get_forward_fn(
   Returns:
     A `hk.TransformedWithState` object representing the forward pass.
   """
-  jmp_policy = jmp.get_policy(jmp_policy)
+  jmp_policy: jmp.Policy = jmp.get_policy(jmp_policy)
 
   @hk.transform_with_state
   def forward(batch: schemas.DataBatch):

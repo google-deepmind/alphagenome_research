@@ -16,6 +16,7 @@
 
 from alphagenome import typing
 from alphagenome.data import genome
+from alphagenome.data import track_data
 from alphagenome.models import dna_output
 from alphagenome.models import variant_scorers
 from alphagenome_research.model.variant_scoring import gene_mask_extractor
@@ -127,6 +128,7 @@ class PolyadenylationVariantScorer(variant_scoring.VariantScorer):
     )
     has_gene_id_nopatch = 'gene_id_nopatch' in gene_metadata.columns
     for gene_index, gene_row in gene_metadata.iterrows():
+      assert isinstance(gene_index, int)
       gene_id = (
           gene_row['gene_id_nopatch']
           if has_gene_id_nopatch
@@ -225,9 +227,10 @@ class PolyadenylationVariantScorer(variant_scoring.VariantScorer):
   ) -> anndata.AnnData:
     """See base class."""
 
-    track_metadata = track_metadata.get(settings.requested_output)
+    var = track_metadata.get(settings.requested_output)
+    assert isinstance(var, track_data.TrackMetadata)
     return variant_scoring.create_anndata(
         scores['scores'][scores['gene_mask']],
         obs=mask_metadata,
-        var=track_metadata,
+        var=var,
     )

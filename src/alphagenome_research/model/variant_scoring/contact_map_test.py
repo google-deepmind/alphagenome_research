@@ -133,7 +133,7 @@ class ContactMapVariantScorerTest(parameterized.TestCase):
     alt = {dna_output.OutputType.CONTACT_MAPS: alt_contact_map}
 
     # Simple center mask.
-    mask = np.array([False, True, False])[:, None]
+    mask = jnp.array([False, True, False])[:, None]
 
     # Score center column of both channels of the diff.
     variant_scores = (

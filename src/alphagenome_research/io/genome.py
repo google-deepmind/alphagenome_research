@@ -81,12 +81,14 @@ def insert_alternate_variant(
 
   if variant.end > interval.end:
     # Variant reference is partially outside of the interval at the end.
-    variant, _ = variant.split(interval.end)
+    variant, _ = variant.split(interval.end)  # pyrefly: ignore[bad-assignment]
     assert isinstance(variant, genome.Variant)
 
   if variant.start < interval.start:
     # Variant reference is partially outside of the interval at the start.
-    _, variant = variant.split(interval.start)
+    _, variant = variant.split(  # pyrefly: ignore[bad-assignment]
+        interval.start
+    )
     assert isinstance(variant, genome.Variant)
 
   relative_start = variant.start - interval.start

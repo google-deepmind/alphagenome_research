@@ -200,6 +200,7 @@ class GeneMaskVariantScorerTest(parameterized.TestCase):
     track_metadata = dna_output.OutputMetadata(
         rna_seq=_get_mock_rnaseq_track_metadata()
     )
+    self.assertIsNotNone(track_metadata.rna_seq)
     num_tracks = len(track_metadata.rna_seq)
     gene_masks, _ = gene_variant_scorer.get_masks_and_metadata(
         interval, variant, settings=settings, track_metadata=track_metadata

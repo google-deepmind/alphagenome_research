@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from collections.abc import Mapping
 import os
 import pathlib
 from unittest import mock
@@ -148,6 +149,9 @@ class DnaModelTest(parameterized.TestCase):
       splice_site_positions[:, 1, 0] = 200  # pos acceptor
       splice_site_positions[:, 2, 0] = 300  # neg donor
       splice_site_positions[:, 3, 0] = 50  # neg acceptor
+      self.assertIsNotNone(self._metadata.atac)
+      self.assertIsNotNone(self._metadata.dnase)
+      self.assertIsNotNone(self._metadata.contact_maps)
       return {
           'atac': {
               'predictions_1bp': jnp.zeros(
@@ -265,6 +269,9 @@ class DnaModelTest(parameterized.TestCase):
       splice_site_positions[:, 1, 0] = 200  # pos acceptor
       splice_site_positions[:, 2, 0] = 300  # neg donor
       splice_site_positions[:, 3, 0] = 50  # neg acceptor
+      self.assertIsNotNone(self._metadata.atac)
+      self.assertIsNotNone(self._metadata.dnase)
+      self.assertIsNotNone(self._metadata.contact_maps)
       return {
           'atac': {
               'predictions_1bp': jnp.zeros(
@@ -409,13 +416,13 @@ class DnaModelTest(parameterized.TestCase):
         device=jax.local_devices()[0],
     )
     interval = genome.Interval.from_str('chr1:0-2048:.')
-    output = model.predict_interval(
+    outputs = model.predict_interval(
         interval,
         requested_outputs=requested_outputs,
         ontology_terms=requested_ontologies,
     )
     for output_type, expected_shape in expected_shapes.items():
-      output = output.get(output_type)
+      output = outputs.get(output_type)
       self.assertIsNotNone(output)
       chex.assert_shape(output.values, expected_shape)
 
@@ -655,6 +662,10 @@ class DnaModelTest(parameterized.TestCase):
         ),
         variant_scorers.SpliceJunctionScorer(),
     ]
+    self.assertIsNotNone(self._metadata.atac)
+    self.assertIsNotNone(self._metadata.chip_tf)
+    self.assertIsNotNone(self._metadata.contact_maps)
+    self.assertIsNotNone(self._metadata.splice_junctions)
     expected_shapes = {
         scorers[0].name: (1, len(self._metadata.atac)),
         scorers[1].name: (1, len(self._metadata.chip_tf)),
@@ -702,7 +713,7 @@ class DnaModelTest(parameterized.TestCase):
         calibration_scorers=calibration_scorers,
     )
     interval = genome.Interval.from_str('chr1:0-2048:.')
-    variant = genome.Variant.from_str(variant)
+    variant: genome.Variant = genome.Variant.from_str(variant)
     output = model.score_variant(interval, variant, variant_scorers=scorers)
     self.assertLen(output, len(scorers))
     for result, scorer in zip(output, scorers):
@@ -711,7 +722,9 @@ class DnaModelTest(parameterized.TestCase):
       self.assertEqual(result.uns['variant'], variant)
       self.assertEqual(result.uns['variant_scorer'], scorer)
       if with_calibration:
-        self.assertIn('quantiles', result.layers)
+        layers = result.layers
+        self.assertIsInstance(layers, Mapping)
+        self.assertIn('quantiles', layers)
 
     df = variant_scorers.tidy_scores(output)
     expected_columns = [

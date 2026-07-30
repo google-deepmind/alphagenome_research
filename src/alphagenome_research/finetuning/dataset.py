@@ -15,6 +15,7 @@
 
 from collections.abc import Iterator, Sequence
 import concurrent.futures
+import sys
 from typing import Any, Mapping
 
 from absl import logging
@@ -127,7 +128,7 @@ class MultiTrackExtractor:
       )
     return signature
 
-  def extract(self, interval: genome.Interval) -> Mapping[str, tf.Tensor]:
+  def extract(self, interval: genome.Interval) -> Mapping[str, np.ndarray]:
     """Extracts all tracks for all groups in parallel."""
 
     # Submit
@@ -214,7 +215,7 @@ class DataPipeline:
   ) -> Iterator[Mapping[str, Any]]:
     """Returns a generator for the dataset."""
     rng = np.random.default_rng(seed=seed)
-    num_epochs = num_epochs if num_epochs > 0 else float('inf')
+    num_epochs = num_epochs if num_epochs > 0 else sys.maxsize
     epoch_idx = 0
     while epoch_idx < num_epochs:
       epoch_idx += 1
