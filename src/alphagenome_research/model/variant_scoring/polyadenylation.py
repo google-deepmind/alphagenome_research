@@ -209,10 +209,14 @@ class PolyadenylationVariantScorer(variant_scoring.VariantScorer):
     ref = ref[settings.requested_output]
     alt = alt[settings.requested_output]
 
+    # pyrefly: ignore[bad-assignment]
     alt = variant_scoring.align_alternate(alt, masks.indel_mask)
     return {
         'scores': _aggregate_maximum_ratio_coverage_fc(
-            ref, alt, jnp.asarray(masks.pas_mask)
+            # pyrefly: ignore[bad-argument-type]
+            ref,
+            alt,
+            jnp.asarray(masks.pas_mask),
         ),
         'gene_mask': masks.gene_mask,
     }

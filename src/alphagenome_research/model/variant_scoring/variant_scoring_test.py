@@ -94,6 +94,7 @@ class AlignAlternateTest(parameterized.TestCase):
     interval = genome.Interval('chr1', 0, 10, strand)
     alt = np.arange(10, dtype=np.float32).reshape(-1, 1)
     indel_mask = variant_scoring.IndelMask.from_variant(variant, interval)
+    # pyrefly: ignore[bad-argument-type]
     aligned_alt = variant_scoring.align_alternate(alt, indel_mask)
     chex.assert_shape(aligned_alt, (10, 1))
     np.testing.assert_array_equal(aligned_alt, expected.reshape(-1, 1))

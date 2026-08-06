@@ -173,6 +173,7 @@ class GeneVariantScorer(
     del variant, interval  # Unused.
     alt = alt[settings.requested_output]
     ref = ref[settings.requested_output]
+    # pyrefly: ignore[bad-assignment]
     alt = variant_scoring.align_alternate(alt, masks.indel_mask)
     output = _score_gene_variant(ref, alt, masks.gene_mask, settings=settings)
     return {'score': output}
