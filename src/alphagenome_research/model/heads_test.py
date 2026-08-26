@@ -33,7 +33,6 @@ import jax.numpy as jnp
 import numpy as np
 import pandas as pd
 
-
 _EMBEDDING_DIM_PAIR = 128
 _EMBEDDING_DIM_1BP = 1536
 _EMBEDDING_DIM_128BP = 3072

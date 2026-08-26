@@ -40,7 +40,6 @@ import orbax.checkpoint as ocp
 import pandas as pd
 import tensorflow as tf
 
-
 PS = sharding.PartitionSpec
 PredictFn = Callable[
     [

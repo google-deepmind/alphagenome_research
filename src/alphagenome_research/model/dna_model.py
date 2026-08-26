@@ -66,7 +66,6 @@ import numpy as np
 import orbax.checkpoint as ocp
 import pandas as pd
 
-
 AlphaGenomeOutputMetadata: TypeAlias = metadata_lib.AlphaGenomeOutputMetadata
 ModelVersion: TypeAlias = dna_model.ModelVersion
 Organism: TypeAlias = dna_model.Organism

@@ -24,7 +24,6 @@ import jax
 import jax.numpy as jnp
 from jaxtyping import Array, Float, Int  # pylint: disable=g-importing-member, g-multiple-import
 
-
 _MAX_RELATIVE_DISTANCE = 8192  # 1Mb / 128bp.
 
 

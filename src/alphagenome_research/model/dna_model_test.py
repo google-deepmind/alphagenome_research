@@ -41,7 +41,6 @@ import numpy as np
 import orbax.checkpoint as ocp
 import pandas as pd
 
-
 MOCK_SHAPES = ({}, {})
 
 _SPLICE_JUNCTION_PADDING = 2

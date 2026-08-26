@@ -31,7 +31,6 @@ from jaxtyping import Array, Bool, Float32  # pylint: disable=g-multiple-import,
 import numpy as np
 import pandas as pd
 
-
 _VariantScorerSettings = (
     variant_scorers.GeneMaskLFCScorer
     | variant_scorers.GeneMaskActiveScorer

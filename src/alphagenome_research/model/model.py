@@ -31,7 +31,6 @@ import jax
 import jax.numpy as jnp
 from jaxtyping import Array, Float, Int, PyTree, Shaped  # pylint: disable=g-importing-member, g-multiple-import
 
-
 DEFAULT_NUM_SPLICE_SITES = 512
 DEFAULT_SPLICE_SITE_THRESHOLD = 0.1
 
