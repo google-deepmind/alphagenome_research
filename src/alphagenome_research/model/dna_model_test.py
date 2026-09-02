@@ -665,7 +665,7 @@ class DnaModelTest(parameterized.TestCase):
     self.assertIsNotNone(self._metadata.chip_tf)
     self.assertIsNotNone(self._metadata.contact_maps)
     self.assertIsNotNone(self._metadata.splice_junctions)
-    expected_shapes = {
+    calibration_shapes = {
         scorers[0].name: (1, len(self._metadata.atac)),
         scorers[1].name: (1, len(self._metadata.chip_tf)),
         scorers[2].name: (1, len(self._metadata.contact_maps)),
@@ -675,15 +675,14 @@ class DnaModelTest(parameterized.TestCase):
             len(self._metadata.splice_junctions) - _SPLICE_JUNCTION_PADDING,
         ),
     }
-    self.assertLen(scorers, len(expected_shapes))
 
     calibration_scorers = {}
     if with_calibration:
       mock_calibration_scorer.has_variant_scorer.side_effect = (
-          lambda scorer_name: scorer_name in expected_shapes
+          lambda scorer_name: scorer_name in calibration_shapes
       )
       mock_calibration_scorer.quantile_scores.side_effect = (
-          lambda scorer_name, *_: np.zeros(expected_shapes[scorer_name])
+          lambda scorer_name, *_: np.zeros(calibration_shapes[scorer_name])
       )
       calibration_scorers[dna_model.Organism.HOMO_SAPIENS] = (
           mock_calibration_scorer
@@ -715,6 +714,14 @@ class DnaModelTest(parameterized.TestCase):
     variant: genome.Variant = genome.Variant.from_str(variant)
     output = model.score_variant(interval, variant, variant_scorers=scorers)
     self.assertLen(output, len(scorers))
+
+    expected_shapes = {
+        scorers[0].name: (1, 2),  # ATAC
+        scorers[1].name: (1, 2),  # CHIP_TF
+        scorers[2].name: (1, 2),  # CONTACT_MAPS
+        scorers[3].name: (2, 1),  # ATAC // 2
+        scorers[4].name: (0, self._num_tissues),  # SPLICE_JUNCTION
+    }
     for result, scorer in zip(output, scorers):
       chex.assert_shape(result.X, expected_shapes[scorer.name])
       self.assertEqual(result.uns['interval'], interval)

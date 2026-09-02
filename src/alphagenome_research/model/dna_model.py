@@ -33,6 +33,7 @@ from alphagenome.models import dna_model
 from alphagenome.models import dna_output
 from alphagenome.models import interval_scorers as interval_scorers_lib
 from alphagenome.models import variant_scorers as variant_scorers_lib
+from alphagenome.models import variant_scoring_utils
 from alphagenome_research.io import genome as genome_io
 from alphagenome_research.io import splicing as splicing_io
 from alphagenome_research.model import augmentation
@@ -1235,6 +1236,7 @@ class AlphaGenomeModel(dna_model.DnaModel):
               scorer_settings.name, result
           )
 
+        result = variant_scoring_utils.merge_stranded_gene_tracks(result)
         results.append(result)
 
     return results
