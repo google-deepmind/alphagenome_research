@@ -126,10 +126,12 @@ class SpliceSiteAnnotationExtractor:
       donor_theta_rw = donors_rw[tissues].to_numpy()
       accept_theta_rw = accept_rw[tissues].to_numpy()
     else:
-      donor_theta_fw = True
-      accept_theta_fw = True
-      donor_theta_rw = True
-      accept_theta_rw = True
+      # Without tissue annotations, every junction is treated as expressed, so
+      # use a single all-True column per junction.
+      donor_theta_fw = np.ones((len(donor_idx_fw), 1), dtype=bool)
+      accept_theta_fw = np.ones((len(accept_idx_fw), 1), dtype=bool)
+      donor_theta_rw = np.ones((len(donor_idx_rw), 1), dtype=bool)
+      accept_theta_rw = np.ones((len(accept_idx_rw), 1), dtype=bool)
 
     if interval.negative_strand:
       # Then model sees negative strand data as positive strand, swap arrays.
@@ -144,10 +146,10 @@ class SpliceSiteAnnotationExtractor:
       accept_idx_rw = interval.width - 1 - accept_idx_rw
 
     splice_sites = np.zeros((interval.width, 5), dtype=bool)
-    splice_sites[donor_idx_fw, 0] = np.any(donor_theta_fw > 0)
-    splice_sites[accept_idx_fw, 1] = np.any(accept_theta_fw > 0)
-    splice_sites[donor_idx_rw, 2] = np.any(donor_theta_rw > 0)
-    splice_sites[accept_idx_rw, 3] = np.any(accept_theta_rw > 0)
+    splice_sites[donor_idx_fw, 0] = np.any(donor_theta_fw > 0, axis=1)
+    splice_sites[accept_idx_fw, 1] = np.any(accept_theta_fw > 0, axis=1)
+    splice_sites[donor_idx_rw, 2] = np.any(donor_theta_rw > 0, axis=1)
+    splice_sites[accept_idx_rw, 3] = np.any(accept_theta_rw > 0, axis=1)
     splice_sites[:, 4] = np.logical_not(np.any(splice_sites[:, :4], axis=1))
 
     return splice_sites
