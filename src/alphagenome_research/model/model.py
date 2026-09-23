@@ -40,16 +40,26 @@ class SequenceEncoder(hk.Module):
 
   @typing.jaxtyped
   def __call__(
-      self, dna_sequence: Float[Array, 'B S 4'], *, is_training: bool
+      self,
+      dna_sequence: Float[Array, 'B S 4'],
+      *,
+      is_training: bool,
+      remat: bool = False,
   ) -> tuple[Float[Array, 'B S//128 D'], dict[str, Array]]:
     intermediates = {}
-    x = convolutions.DnaEmbedder()(dna_sequence, is_training=is_training)
+    embed = layers.maybe_hk_remat(
+        convolutions.DnaEmbedder(), remat, static_argnames=('is_training',)
+    )
+    x = embed(dna_sequence, is_training=is_training)
     intermediates['bin_size_1'] = x
     x = layers.pool(x)
     for block_idx, bin_size in enumerate([2, 4, 8, 16, 32, 64]):
-      x = convolutions.DownResBlock(f'downres_block_{block_idx}')(
-          x, is_training=is_training
+      block = layers.maybe_hk_remat(
+          convolutions.DownResBlock(f'downres_block_{block_idx}'),
+          remat,
+          static_argnames=('is_training',),
       )
+      x = block(x, is_training=is_training)
       intermediates[f'bin_size_{bin_size}'] = x
       x = layers.pool(x)
     return x, intermediates
@@ -65,12 +75,32 @@ class SequenceDecoder(hk.Module):
       intermediates: dict[str, Array],
       *,
       is_training: bool,
+      remat: bool = False,
   ) -> Float[Array, 'B S_final D_final']:
     for bin_size in [64, 32, 16, 8, 4, 2, 1]:
-      x = convolutions.UpResBlock()(
+      block = layers.maybe_hk_remat(
+          convolutions.UpResBlock(), remat, static_argnames=('is_training',)
+      )
+      x = block(
           x, intermediates[f'bin_size_{bin_size}'], is_training=is_training
       )
     return x
+
+
+def _transformer_layer(
+    x: Float[Array, 'B S C'],
+    pair_x: Float[Array, 'B S//16 S//16 F'] | None,
+    *,
+    is_training: bool,
+    update_pair: bool,
+) -> tuple[Float[Array, 'B S C'], Float[Array, 'B S//16 S//16 F'] | None]:
+  """Transformer layer with optional pairwise updates."""
+  if update_pair:
+    pair_x = attention.PairUpdateBlock()(x, pair_x)
+  mha_bias = attention.AttentionBiasBlock()(pair_x, is_training)
+  x = x + attention.MHABlock()(x, mha_bias, is_training=is_training)
+  x = x + attention.MLPBlock()(x, is_training=is_training)
+  return x, pair_x
 
 
 class TransformerTower(hk.Module):
@@ -78,15 +108,22 @@ class TransformerTower(hk.Module):
 
   @typing.jaxtyped
   def __call__(
-      self, x: Float[Array, 'B S C'], *, is_training: bool
+      self,
+      x: Float[Array, 'B S C'],
+      *,
+      is_training: bool,
+      remat: bool = False,
   ) -> tuple[Float[Array, 'B S C'], Float[Array, 'B S//16 S//16 F'] | None]:
     pair_x = None
+    layer = layers.maybe_hk_remat(
+        _transformer_layer,
+        remat,
+        static_argnames=('is_training', 'update_pair'),
+    )
     for i in range(9):
-      if i % 2 == 0:
-        pair_x = attention.PairUpdateBlock()(x, pair_x)
-      mha_bias = attention.AttentionBiasBlock()(pair_x, is_training)
-      x += attention.MHABlock()(x, mha_bias, is_training=is_training)
-      x += attention.MLPBlock()(x, is_training=is_training)
+      x, pair_x = layer(
+          x, pair_x, is_training=is_training, update_pair=i % 2 == 0
+      )
     return x, pair_x
 
 
@@ -110,6 +147,7 @@ class AlphaGenome(hk.Module):
       splice_site_threshold: float = DEFAULT_SPLICE_SITE_THRESHOLD,
       freeze_trunk_embeddings: bool = False,
       num_organisms: int = 2,
+      remat: bool = False,
       name: str | None = None,
   ):
     """Initializes the AlphaGenome model.
@@ -124,6 +162,7 @@ class AlphaGenome(hk.Module):
       num_organisms: The number of organisms. This is used to initialize the
         organism embedding layer. Default is 2, for human and mouse. Leave at 2
         to load pre-trained weights.
+      remat: Whether to apply gradient checkpointing to the trunk blocks.
       name: The name of the module.
     """
 
@@ -133,6 +172,7 @@ class AlphaGenome(hk.Module):
     self._splice_site_threshold = splice_site_threshold
     self._freeze_trunk_embeddings = freeze_trunk_embeddings
     self._num_organisms = num_organisms
+    self._remat = remat
     self._heads: dict[heads_module.HeadName, heads_module.Head] = {}
     self._head_configs: dict[heads_module.HeadName, heads_module.HeadConfig] = (
         {}
@@ -214,22 +254,33 @@ class AlphaGenome(hk.Module):
       of predictions for various heads.
     """
     trunk, intermediates = SequenceEncoder()(
-        dna_sequence, is_training=is_training
+        dna_sequence, is_training=is_training, remat=self._remat
     )
     if self._num_organisms >= 1:
       organism_embedding_trunk = embeddings_module.create_default_embedding(
           self._num_organisms, trunk.shape[-1]
       )(organism_index)
       trunk += organism_embedding_trunk[:, None, :]
-    trunk, pair_activations = TransformerTower()(trunk, is_training=is_training)
+    trunk, pair_activations = TransformerTower()(
+        trunk, is_training=is_training, remat=self._remat
+    )
 
-    x = SequenceDecoder()(trunk, intermediates, is_training=is_training)
+    x = SequenceDecoder()(
+        trunk, intermediates, is_training=is_training, remat=self._remat
+    )
 
     embeddings_128bp = embeddings_module.OutputEmbedder(self._num_organisms)(
         trunk, organism_index, is_training=is_training
     )
-    embeddings_1bp = embeddings_module.OutputEmbedder(self._num_organisms)(
-        x, organism_index, is_training=is_training, skip_x=embeddings_128bp
+    # The 1bp embedder holds four [B, L, 2D] tensors live at once, which makes
+    # it the largest single transient at long sequence lengths.
+    embed_1bp = layers.maybe_hk_remat(
+        embeddings_module.OutputEmbedder(self._num_organisms),
+        self._remat,
+        static_argnames=('is_training',),
+    )
+    embeddings_1bp = embed_1bp(
+        x, organism_index, skip_x=embeddings_128bp, is_training=is_training
     )
     embeddings_pair = embeddings_module.OutputPair(self._num_organisms)(
         pair_activations, organism_index

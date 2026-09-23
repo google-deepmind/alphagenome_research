@@ -14,6 +14,10 @@
 
 """Common layers."""
 
+from collections.abc import Callable, Sequence
+import functools
+from typing import Any
+
 from alphagenome import typing
 import haiku as hk
 import jax
@@ -25,6 +29,24 @@ def gelu(x: jax.Array) -> jax.Array:
   """Gaussian Error Linear Unit activation function."""
   coef = jax.lax.convert_element_type(1.702, x.dtype)
   return jax.nn.sigmoid(coef * x) * x
+
+
+def maybe_hk_remat(
+    f: Callable[..., Any],
+    remat: bool = True,
+    *,
+    static_argnames: Sequence[str] = (),
+) -> Callable[..., Any]:
+  """Optionally applies hk.remat to f, treating static_argnames as static."""
+  if not remat:
+    return f
+
+  @functools.wraps(f)
+  def wrapped(*args: Any, **kwargs: Any) -> Any:
+    static_kwargs = {k: kwargs.pop(k) for k in static_argnames}
+    return hk.remat(functools.partial(f, **static_kwargs))(*args, **kwargs)
+
+  return wrapped
 
 
 @typing.jaxtyped

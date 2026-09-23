@@ -17,6 +17,7 @@ from absl.testing import parameterized
 from alphagenome_research.model import layers
 import chex
 import haiku as hk
+import jax
 import jax.numpy as jnp
 
 
@@ -65,6 +66,35 @@ class LayersTest(parameterized.TestCase):
         pool_mod = _get_pool_layer(by=self._by)
         params = pool_mod.init(None, x)
         pool_mod.apply(params, None, x)
+
+  def test_maybe_hk_remat_respects_flag(self):
+    """Tests that the function is returned unwrapped when remat is disabled."""
+    fn = lambda x, *, is_training: x + 1 if is_training else x
+    self.assertIs(
+        layers.maybe_hk_remat(
+            fn, remat=False, static_argnames=('is_training',)
+        ),
+        fn,
+    )
+
+  def test_maybe_hk_remat_static_argnames(self):
+    """Tests that static_argnames can be used in Python control flow under remat."""
+
+    def fn(x, *, scale_by_two: bool):
+      return x * 2.0 if scale_by_two else x
+
+    @hk.without_apply_rng
+    @hk.transform
+    def forward(x):
+      rematted = layers.maybe_hk_remat(
+          fn, remat=True, static_argnames=('scale_by_two',)
+      )
+      return jnp.sum(rematted(x, scale_by_two=True))
+
+    x = jnp.ones((4,))
+    params = forward.init(None, x)
+    grad_x = jax.grad(lambda inp: forward.apply(params, inp))(x)
+    chex.assert_trees_all_close(grad_x, jnp.full((4,), 2.0))
 
 
 if __name__ == '__main__':

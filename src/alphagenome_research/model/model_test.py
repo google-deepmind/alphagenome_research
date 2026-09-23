@@ -486,6 +486,33 @@ class ModelTest(parameterized.TestCase):
     )
     self.assertGreater(head_grad_sq_norm, 0.0)
 
+  def test_remat_preserves_parameter_names(self):
+    """Tests that rematerialization does not change parameter names."""
+    output_metadata = {
+        dna_model.Organism.HOMO_SAPIENS: metadata_lib.AlphaGenomeOutputMetadata(
+            atac=_mock_track_metadata(num_tracks=1),
+        ),
+    }
+
+    def init_shapes(remat: bool):
+      @hk.transform_with_state
+      def forward(dna_sequence, organism_index):
+        return model_lib.AlphaGenome(output_metadata, remat=remat)(
+            dna_sequence, organism_index
+        )
+
+      return jax.eval_shape(
+          forward.init,
+          jax.random.key(0),
+          jax.ShapeDtypeStruct((1, 2048, 4), jnp.float32),
+          jax.ShapeDtypeStruct((1,), jnp.int32),
+      )
+
+    params, state = init_shapes(remat=False)
+    remat_params, remat_state = init_shapes(remat=True)
+    chex.assert_trees_all_equal_shapes_and_dtypes(params, remat_params)
+    chex.assert_trees_all_equal_shapes_and_dtypes(state, remat_state)
+
 
 if __name__ == '__main__':
   absltest.main()
