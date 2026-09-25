@@ -80,6 +80,38 @@ class SpliceSiteAnnotationExtractorTest(parameterized.TestCase):
 
     np.testing.assert_array_equal(result, expected_sites)
 
+  def test_extract_zero_expression_junction_not_marked(self):
+    """Junctions with zero expression in every tissue are not splice sites."""
+    interval_start = 100
+    interval_end = 116
+    junction_starts = pd.DataFrame({
+        'Chromosome': 'chr1',
+        'Start': [101, 106],
+        'Strand': ['+', '+'],
+        'Tissue_0': [1, 0],
+    })
+    junction_ends = pd.DataFrame({
+        'Chromosome': 'chr1',
+        'End': [104, 109],
+        'Strand': ['+', '+'],
+        'Tissue_0': [1, 0],
+    })
+    interval = genome.Interval('chr1', interval_start, interval_end, '+')
+    extractor = splicing.SpliceSiteAnnotationExtractor(
+        junction_starts, junction_ends
+    )
+    result = extractor.extract(interval)
+
+    expected_sites = np.zeros((interval.width, 5), dtype=bool)
+    # The expressed junction (Start=101, End=104) contributes a donor at
+    # Start-1 and an acceptor at End, in 0-based coordinates within the interval.
+    expected_sites[0, 0] = True
+    expected_sites[4, 1] = True
+    # The zero-expression junction (Start=106, End=109) must not be marked.
+    expected_sites[:, 4] = np.logical_not(np.any(expected_sites[:, :4], axis=1))
+
+    np.testing.assert_array_equal(result, expected_sites)
+
   def test_tissue_mismatch_raises(self):
     junction_starts = pd.DataFrame({
         'Chromosome': 'chr1',
