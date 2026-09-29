@@ -92,13 +92,12 @@ class ContactMapScorer(variant_scoring.VariantScorer):
       interval: genome.Interval | None = None,
   ) -> variant_scoring.ScoreVariantOutput:
     del variant, interval  # Unused.
-    ref = ref[settings.requested_output]
-    alt = alt[settings.requested_output]
-
     # Mean absolute difference, reduced over contact map rows.
     # Ref, alt shape: [H, W, C]
     # Temps shape: [W, C]
-    abs_diff = jnp.abs(alt - ref).mean(axis=0)  # pyrefly: ignore[unsupported-operation]
+    abs_diff = jnp.abs(
+        alt[settings.requested_output] - ref[settings.requested_output]
+    ).mean(axis=0)
 
     # JAX dynamic slicing does not work with transfer_guard.
     with jax.transfer_guard('allow'):
