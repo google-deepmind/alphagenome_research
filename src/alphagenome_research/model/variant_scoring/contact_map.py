@@ -98,7 +98,7 @@ class ContactMapScorer(variant_scoring.VariantScorer):
     # Mean absolute difference, reduced over contact map rows.
     # Ref, alt shape: [H, W, C]
     # Temps shape: [W, C]
-    abs_diff = jnp.abs(alt - ref).mean(axis=0)
+    abs_diff = jnp.abs(alt - ref).mean(axis=0)  # pyrefly: ignore[unsupported-operation]
 
     # JAX dynamic slicing does not work with transfer_guard.
     with jax.transfer_guard('allow'):
