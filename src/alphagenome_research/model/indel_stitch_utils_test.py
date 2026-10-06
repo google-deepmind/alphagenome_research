@@ -100,7 +100,7 @@ class IndelStitchUtilsTest(parameterized.TestCase):
           expected='ACGTACGTACGT',
       ),
       dict(
-          testcase_name='shift_1bp',
+          testcase_name='shift_2bp',
           left_seq='AAAACCCC',
           right_seq='TTTTGGGG',
           left_shift=0,
@@ -109,7 +109,7 @@ class IndelStitchUtilsTest(parameterized.TestCase):
           expected='AAAATTGG',
       ),
       dict(
-          testcase_name='shift_3bp_v2',
+          testcase_name='shift_1bp',
           left_seq='AAAACCCC',
           right_seq='GGGGTTTT',
           left_shift=0,
