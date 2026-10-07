@@ -145,6 +145,35 @@ For further examples, please see our
 [quick-start](https://colab.research.google.com/github/google-deepmind/alphagenome_research/blob/main/colabs/quick_start.ipynb)
 notebook.
 
+### Enhancer-gene input-gradient scoring
+
+The input-gradient feature used for enhancer-gene linking in the AlphaGenome
+paper (Fig. 4j and Extended Data Fig. 7) is a study-specific evaluation
+procedure. This repository does not currently expose an end-to-end public
+helper for computing that score.
+
+For reproducibility, the Supplementary Methods describe the published procedure
+as follows:
+
+1. Center the reference input sequence on the midpoint of the target gene.
+2. Use the average predicted gene expression across K562 RNA-seq tracks as the
+   scalar prediction. Gene expression is computed as the log of coverage summed
+   across the target gene's exons.
+3. Differentiate that scalar with respect to the input sequence and compute the
+   absolute input-gradient contribution scores.
+4. Score an enhancer with a Gaussian-weighted average of those contributions in
+   a 2,400-bp window centered on the enhancer, using a standard deviation of
+   300 bp.
+5. Normalize the enhancer score by the mean absolute input-gradient contribution
+   across the full input sequence. Enhancers outside the model input context are
+   assigned a score of zero.
+
+The supervised ENCODE-rE2G evaluation used this K562 RNA-seq input-gradient
+score as one additional feature. See the
+[AlphaGenome paper](https://doi.org/10.1038/s41586-025-10014-0), Supplementary
+Methods, section "Enhancer-gene linking", for the benchmark definition and
+additional evaluation details.
+
 ## Citing AlphaGenome
 
 If you use AlphaGenome in your research, please cite using:
