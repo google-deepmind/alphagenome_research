@@ -16,8 +16,8 @@ from collections.abc import Mapping, Sequence
 from absl.testing import absltest
 from absl.testing import parameterized
 from alphagenome.data import ontology
-from alphagenome.models import dna_model
-from alphagenome.models import dna_output
+from alphagenome.models.v1 import dna_model
+from alphagenome.models.v1 import dna_output
 from alphagenome_research.model.metadata import metadata as metadata_lib
 import chex
 import jax

@@ -19,7 +19,7 @@ from collections.abc import Mapping
 from typing import Generic, TypeVar
 
 from alphagenome.data import genome
-from alphagenome.models import dna_output
+from alphagenome.models.v1 import dna_output
 import anndata
 import jax
 from jaxtyping import Array, Float32  # pylint: disable=g-multiple-import, g-importing-member

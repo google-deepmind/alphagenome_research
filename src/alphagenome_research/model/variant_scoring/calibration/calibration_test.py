@@ -16,9 +16,9 @@ from unittest import mock
 
 from absl.testing import absltest
 from absl.testing import parameterized
-from alphagenome.models import dna_output
-from alphagenome.models import track_data_utils
-from alphagenome.models import variant_scorers
+from alphagenome.models.v1 import dna_output
+from alphagenome.models.v1 import track_data_utils
+from alphagenome.models.v1 import variant_scorers
 from alphagenome_research.model.variant_scoring.calibration import calibration
 from alphagenome_research.protos import calibration_scores_pb2
 import anndata

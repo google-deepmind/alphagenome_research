@@ -23,9 +23,10 @@ import pathlib
 from alphagenome import typing
 from alphagenome.data import ontology
 from alphagenome.data import track_data
-from alphagenome.models import dna_client
-from alphagenome.models import dna_model
-from alphagenome.models import dna_output
+from alphagenome.models.v1 import dna_client
+from alphagenome.models.v1 import dna_model
+from alphagenome.models.v1 import dna_output
+
 from alphagenome.protos import dna_model_service_pb2
 from google.protobuf import text_format
 from jaxtyping import Bool, Int32  # pylint: disable=g-importing-member, g-multiple-import

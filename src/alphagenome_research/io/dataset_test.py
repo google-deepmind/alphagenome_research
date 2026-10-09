@@ -17,7 +17,7 @@ from absl.testing import absltest
 from absl.testing import parameterized
 from alphagenome.data import fold_intervals
 from alphagenome.data import genome
-from alphagenome.models import dna_model
+from alphagenome.models.v1 import dna_model
 from alphagenome_research.io import bundles
 from alphagenome_research.io import dataset
 from alphagenome_research.model import schemas

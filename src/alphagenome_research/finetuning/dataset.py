@@ -21,8 +21,8 @@ from typing import Any, Mapping
 from absl import logging
 from alphagenome.data import genome
 from alphagenome.io import fasta
-from alphagenome.models import dna_model
-from alphagenome.models import dna_output
+from alphagenome.models.v1 import dna_model
+from alphagenome.models.v1 import dna_output
 from alphagenome_research.model import one_hot_encoder
 from alphagenome_research.model.metadata import metadata as metadata_lib
 import numpy as np

@@ -19,7 +19,7 @@ import dataclasses
 import os
 
 from alphagenome import typing
-from alphagenome.models import track_data_utils
+from alphagenome.models.v1 import track_data_utils
 from alphagenome_research.protos import calibration_scores_pb2
 import anndata
 import chex

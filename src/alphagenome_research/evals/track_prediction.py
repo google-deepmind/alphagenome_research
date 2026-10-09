@@ -20,7 +20,7 @@ from typing import Callable, Sequence
 from absl import app
 from absl import logging
 from alphagenome.data import fold_intervals
-from alphagenome.models import dna_output
+from alphagenome.models.v1 import dna_output
 from alphagenome_research.evals import regression_metrics
 from alphagenome_research.io import bundles as bundles_lib
 from alphagenome_research.io import dataset

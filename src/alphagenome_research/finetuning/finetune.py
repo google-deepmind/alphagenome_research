@@ -16,7 +16,7 @@
 from collections.abc import Iterator, Mapping
 from typing import Any, Callable
 from alphagenome.data import fold_intervals
-from alphagenome.models import dna_model
+from alphagenome.models.v1 import dna_model
 from alphagenome_research.finetuning import dataset as dataset_lib
 from alphagenome_research.model import model
 from alphagenome_research.model import schemas

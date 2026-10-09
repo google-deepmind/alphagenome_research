@@ -31,7 +31,7 @@ import re
 from typing import Any, Sequence
 
 from alphagenome.data import fold_intervals
-from alphagenome.models import dna_model
+from alphagenome.models.v1 import dna_model
 from alphagenome_research.io import bundles as bundles_lib
 from alphagenome_research.model import dna_model as research_dna_model
 from alphagenome_research.model import schemas
