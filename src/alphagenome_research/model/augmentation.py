@@ -18,7 +18,7 @@ from collections.abc import Mapping
 from typing import TypeAlias
 
 from alphagenome import typing
-from alphagenome.models import dna_output
+from alphagenome.models.v1 import dna_output
 import chex
 import jax
 import jax.numpy as jnp

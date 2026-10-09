@@ -19,8 +19,8 @@ from absl.testing import parameterized
 from alphagenome import typing
 from alphagenome.data import junction_data
 from alphagenome.data import track_data
-from alphagenome.models import dna_model
-from alphagenome.models import dna_output
+from alphagenome.models.v1 import dna_model
+from alphagenome.models.v1 import dna_output
 from alphagenome_research.io import bundles
 from alphagenome_research.model import embeddings
 from alphagenome_research.model import heads

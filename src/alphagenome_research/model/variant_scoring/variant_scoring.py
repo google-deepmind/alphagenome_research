@@ -20,7 +20,7 @@ from typing import Generic, TypeVar
 
 from alphagenome import typing
 from alphagenome.data import genome
-from alphagenome.models import dna_output
+from alphagenome.models.v1 import dna_output
 from alphagenome_research.typing import ArrayType  # pylint: disable=g-importing-member
 import anndata
 import chex

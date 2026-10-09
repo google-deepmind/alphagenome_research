@@ -17,7 +17,7 @@
 from collections.abc import Mapping
 
 from alphagenome import typing
-from alphagenome.models import dna_model
+from alphagenome.models.v1 import dna_model
 from alphagenome_research.model import attention
 from alphagenome_research.model import convolutions
 from alphagenome_research.model import embeddings as embeddings_module

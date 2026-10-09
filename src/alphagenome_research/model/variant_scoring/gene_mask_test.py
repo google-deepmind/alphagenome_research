@@ -16,8 +16,8 @@
 from absl.testing import absltest
 from absl.testing import parameterized
 from alphagenome.data import genome
-from alphagenome.models import dna_output
-from alphagenome.models import variant_scorers
+from alphagenome.models.v1 import dna_output
+from alphagenome.models.v1 import variant_scorers
 from alphagenome_research.model.variant_scoring import gene_mask
 from alphagenome_research.model.variant_scoring import gene_mask_extractor as gene_mask_extractor_lib
 import anndata

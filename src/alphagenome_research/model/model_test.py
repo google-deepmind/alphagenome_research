@@ -16,7 +16,7 @@ from absl.testing import absltest
 from absl.testing import parameterized
 from alphagenome.data import junction_data
 from alphagenome.data import track_data
-from alphagenome.models import dna_model
+from alphagenome.models.v1 import dna_model
 from alphagenome_research.model import embeddings as embeddings_lib
 from alphagenome_research.model import model as model_lib
 from alphagenome_research.model import schemas

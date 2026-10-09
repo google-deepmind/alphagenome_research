@@ -29,11 +29,11 @@ from alphagenome.data import ontology
 from alphagenome.data import track_data
 from alphagenome.interpretation import ism
 from alphagenome.io import fasta
-from alphagenome.models import dna_model
-from alphagenome.models import dna_output
-from alphagenome.models import interval_scorers as interval_scorers_lib
-from alphagenome.models import variant_scorers as variant_scorers_lib
-from alphagenome.models import variant_scoring_utils
+from alphagenome.models.v1 import dna_model
+from alphagenome.models.v1 import dna_output
+from alphagenome.models.v1 import interval_scorers as interval_scorers_lib
+from alphagenome.models.v1 import variant_scorers as variant_scorers_lib
+from alphagenome.models.v1 import variant_scoring_utils
 from alphagenome_research.io import genome as genome_io
 from alphagenome_research.io import splicing as splicing_io
 from alphagenome_research.model import augmentation

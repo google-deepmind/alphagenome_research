@@ -22,9 +22,9 @@ from absl.testing import parameterized
 from alphagenome.data import genome
 from alphagenome.data import ontology
 from alphagenome.io import fasta
-from alphagenome.models import dna_output
-from alphagenome.models import interval_scorers
-from alphagenome.models import variant_scorers
+from alphagenome.models.v1 import dna_output
+from alphagenome.models.v1 import interval_scorers
+from alphagenome.models.v1 import variant_scorers
 from alphagenome_research.io import splicing
 from alphagenome_research.model import dna_model
 from alphagenome_research.model import embeddings

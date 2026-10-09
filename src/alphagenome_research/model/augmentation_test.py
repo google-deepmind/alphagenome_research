@@ -17,7 +17,7 @@ import functools
 
 from absl.testing import absltest
 from absl.testing import parameterized
-from alphagenome.models import dna_output
+from alphagenome.models.v1 import dna_output
 from alphagenome_research.model import augmentation
 import chex
 import jax
