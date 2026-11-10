@@ -262,5 +262,55 @@ class GeneIntervalScorerTest(parameterized.TestCase):
     np.testing.assert_array_almost_equal(finalized_score.X, expected_scores)
 
 
+  def test_gene_scorer_finalize_masks_opposite_strand_tracks(self):
+    """finalize_interval must NaN out a gene's score against an
+    opposite-strand track, mirroring finalize_variant's strand handling --
+    a gene's aggregated signal on an antisense track is not meaningful.
+    """
+    output_type = dna_output.OutputType.RNA_SEQ
+    track_metadata = dna_output.OutputMetadata(
+        rna_seq=pd.DataFrame({
+            'name': ['plus_track', 'minus_track', 'unstranded_track'],
+            'strand': ['+', '-', '.'],
+        })
+    )
+    mask_metadata = pd.DataFrame({
+        'gene_id': ['G1', 'G2'],
+        'strand': ['+', '-'],
+    })
+    scores = {
+        'score': np.array(
+            [[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]], dtype=jnp.float32
+        )
+    }
+
+    gtf = _load_gtf()
+    interval_scorer = gene_mask.GeneIntervalScorer(
+        gene_mask_extractor.GeneMaskExtractor(
+            gtf=gtf, gene_mask_type=gene_mask_extractor.GeneMaskType.BODY
+        )
+    )
+    settings = interval_scorers.GeneMaskScorer(
+        requested_output=output_type,
+        aggregation_type=interval_scorers.IntervalAggregationType.SUM,
+        width=2001,
+    )
+
+    finalized_score = interval_scorer.finalize_interval(
+        scores,
+        track_metadata=track_metadata,
+        mask_metadata=mask_metadata,
+        settings=settings,
+    )
+
+    # G1 (+): keeps plus_track and unstranded_track, NaNs minus_track.
+    # G2 (-): keeps minus_track and unstranded_track, NaNs plus_track.
+    expected_scores = np.array(
+        [[1.0, np.nan, 3.0], [np.nan, 5.0, 6.0]], dtype=jnp.float32
+    )
+    self.assertIsInstance(finalized_score, anndata.AnnData)
+    np.testing.assert_array_almost_equal(finalized_score.X, expected_scores)
+
+
 if __name__ == '__main__':
   absltest.main()
