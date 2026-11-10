@@ -135,8 +135,18 @@ class GeneIntervalScorer(
     """Returns summarized scores for the given scores and metadata."""
     output_metadata = track_metadata.get(settings.requested_output)
     assert isinstance(output_metadata, track_data.TrackMetadata)
+    # Match finalize_variant's strand handling (gene_mask.py in
+    # variant_scoring): a gene's aggregated score against an opposite-strand
+    # track is not meaningful and must be NaN'd out, not reported as if it
+    # were valid same-strand signal. Strand-agnostic ('.') tracks still pass.
+    strand_mask = (
+        np.asarray(mask_metadata['strand'].to_numpy())[:, None]
+        == output_metadata['strand'].to_numpy()[None]
+    ) | (output_metadata['strand'].to_numpy()[None] == '.')
+    num_genes = len(mask_metadata)
+    result = np.where(strand_mask, scores['score'][:num_genes], np.nan)
     return variant_scoring.create_anndata(
-        scores['score'],
+        result,
         obs=mask_metadata,
         var=output_metadata,
     )
